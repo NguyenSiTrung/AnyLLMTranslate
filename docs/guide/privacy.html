@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Privacy policy for the AnyLLMTranslate Chrome extension — what data it handles, where it goes, and the Chrome Web Store Limited Use disclosure.">
+<title>Privacy Policy · AnyLLMTranslate</title>
+<style>
+  :root {
+    --bg: #09090b; --panel: #18181b; --panel-2: #1f1f23; --border: rgba(255,255,255,.08);
+    --text: #d4d4d8; --muted: #a1a1aa; --accent: #f59e0b; --accent-dim: rgba(245,158,11,.12);
+    --link: #60a5fa; --code-bg: #0d0d10; --code-text: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .layout { display: grid; grid-template-columns: 240px minmax(0, 760px); gap: 48px; max-width: 1080px; margin: 0 auto; padding: 32px 24px 96px; }
+  nav.toc { position: sticky; top: 32px; align-self: start; font-size: 13px; }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; }
+  nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 4px 8px; border-left: 2px solid transparent; }
+  nav.toc a:hover { color: var(--text); border-left-color: var(--accent); }
+  main { min-width: 0; }
+  header h1 { font-size: 28px; margin: 0 0 8px; color: #fafafa; }
+  header p { color: var(--muted); margin: 0 0 8px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(245,158,11,.3); }
+  section { margin-top: 48px; }
+  h2 { font-size: 20px; color: #fafafa; margin: 0 0 12px; padding-top: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 16px; color: #e4e4e7; margin: 24px 0 8px; }
+  p, li { color: var(--text); }
+  a { color: var(--link); }
+  code { background: var(--code-bg); color: var(--code-text); padding: 1px 6px; border-radius: 4px; font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin: 16px 0; }
+  .card--limited-use { border-color: rgba(245,158,11,.35); }
+  .note { border-left: 3px solid var(--accent); background: var(--accent-dim); border-radius: 0 8px 8px 0; padding: 10px 14px; font-size: 14px; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 12px 0; }
+  th, td { text-align: left; border: 1px solid var(--border); padding: 8px 12px; vertical-align: top; }
+  th { background: var(--panel-2); color: #e4e4e7; }
+  footer { margin-top: 64px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 16px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } nav.toc { position: static; } nav.toc ul { display: flex; flex-wrap: wrap; gap: 4px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Table of contents">
+  <ul>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#limited-use">Limited Use disclosure</a></li>
+    <li><a href="#data">Data handled</a></li>
+    <li><a href="#consent">Disclosure &amp; consent</a></li>
+    <li><a href="#not">What we don't do</a></li>
+    <li><a href="#destinations">Where data goes</a></li>
+    <li><a href="#credentials">Credential storage</a></li>
+    <li><a href="#permissions">Permissions</a></li>
+    <li><a href="#statistics">Local statistics</a></li>
+    <li><a href="#children">Children</a></li>
+    <li><a href="#changes">Changes</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+</nav>
+<main>
+<header>
+  <h1>Privacy Policy — AnyLLMTranslate</h1>
+  <p><span class="badge">Last updated</span> &nbsp; September 25, 2026</p>
+  <p><a href="./index.html">← Scientific PDF setup guide</a></p>
+</header>
+
+<section id="summary">
+  <h2>Summary</h2>
+  <p>AnyLLMTranslate is a <strong>BYOK (Bring Your Own Key)</strong> translation extension. It sends the text you ask it to translate to the LLM API endpoint <strong>you</strong> configure, and to nothing else. The extension has <strong>no servers of its own</strong>: it never contacts any service operated by the extension developers, and it contains no analytics, telemetry, advertising, or crash reporting.</p>
+  <p>The only external destinations the extension can reach are:</p>
+  <ol>
+    <li><strong>Your LLM provider</strong> — the base URL you enter, or a provider preset you pick from the catalog.</li>
+    <li><strong>Your text-to-speech provider</strong> — only if you enable provider-based speech.</li>
+    <li><strong>Your Scientific PDF bridge</strong> — only if you enable it; default is loopback only (<code>http://127.0.0.1:17890</code>).</li>
+    <li><strong>The website you are already on</strong> — its own subtitle/caption files, fetched so they can be translated and displayed.</li>
+  </ol>
+</section>
+
+<section id="limited-use">
+  <h2>Limited Use disclosure</h2>
+  <div class="card card--limited-use">
+    <p>The use of information received from Google APIs will adhere to the <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-policy" rel="noreferrer">Chrome Web Store User Data Policy</a>, including the <a href="https://developer.chrome.com/docs/webstore/program-policies/limited-use" rel="noreferrer">Limited Use</a> requirements.</p>
+  </div>
+  <p>AnyLLMTranslate does not use or transfer user data for personalized advertising, does not sell user data, does not transfer user data to data brokers or information resellers, and does not use user data to determine credit-worthiness or for lending purposes. No human reads your data.</p>
+</section>
+
+<section id="data">
+  <h2>User data the extension handles</h2>
+  <p>Because the extension clips and translates content from pages you visit, it handles user data. The complete list:</p>
+  <table>
+    <thead><tr><th>Data</th><th>Why it is handled</th><th>Where it goes</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Page text</strong> (the text of the page you translate)</td><td>To produce the translation</td><td>Your configured LLM endpoint only</td></tr>
+      <tr><td><strong>Selected text</strong> (dictionary / selection translate)</td><td>To produce a definition or translation</td><td>Your configured LLM endpoint only</td></tr>
+      <tr><td><strong>Focused input text</strong> (inline input translation)</td><td>To produce a translation you can insert</td><td>Your configured LLM endpoint only</td></tr>
+      <tr><td><strong>Subtitle / caption text</strong></td><td>To produce bilingual subtitles</td><td>Your configured LLM endpoint only</td></tr>
+      <tr><td><strong>The PDF you open</strong> (Scientific PDF mode)</td><td>To produce a translated PDF</td><td>Your configured PDF bridge only — opt-in</td></tr>
+      <tr><td><strong>Page hostname</strong> (e.g. <code>example.com</code>)</td><td>Local usage statistics per site</td><td>Your device only — never transmitted</td></tr>
+      <tr><td><strong>API credentials</strong></td><td>To authenticate to your provider</td><td>Your configured provider, and your PDF bridge if you enable it</td></tr>
+      <tr><td><strong>Extension settings, glossaries, translation cache</strong></td><td>To make the extension work</td><td>Your device only — never transmitted</td></tr>
+      <tr><td><strong>Spoken text</strong> (text-to-speech)</td><td>To synthesize audio</td><td>Your configured provider, if you enable provider speech</td></tr>
+    </tbody>
+  </table>
+  <p>Page text, selected text, and subtitle text are <strong>not</strong> stored by the extension beyond a local translation cache, and are never sent anywhere other than the endpoint you chose.</p>
+</section>
+
+<section id="consent">
+  <h2>Prominent disclosure and consent</h2>
+  <p>Before AnyLLMTranslate sends any text to a provider, the first-run setup wizard displays a <strong>Data &amp; privacy</strong> step that lists the data types above and their destinations, and requires you to take an explicit action to accept it. Translation is blocked until that consent is recorded. You can review the same disclosure at any time in <strong>Options → Statistics → Data &amp; privacy</strong>, and you can revoke consent there.</p>
+</section>
+
+<section id="not">
+  <h2>What the extension does NOT do</h2>
+  <ul>
+    <li>❌ No analytics, telemetry, crash reporting, or usage tracking of any kind</li>
+    <li>❌ No advertising, no ad targeting, no affiliate links or codes</li>
+    <li>❌ No selling or sharing of user data with third parties</li>
+    <li>❌ No accounts, logins, or OAuth</li>
+    <li>❌ No cookies, fingerprinting, or persistent identifiers</li>
+    <li>❌ No reading of your credentials by anyone other than you — there is no developer-side service to read them</li>
+    <li>❌ No collection of your browsing history beyond the local per-site statistics described below</li>
+  </ul>
+</section>
+
+<section id="destinations">
+  <h2>Where data goes, in detail</h2>
+
+  <h3>Your LLM provider (the normal path)</h3>
+  <p>When you translate, the text you asked to translate is sent in an HTTP request to the API base URL <strong>you</strong> configure (for example <code>https://api.openai.com/v1</code> or <code>http://localhost:11434/v1</code>). The request carries your API key in an <code>Authorization</code> header and nothing else about you. No proxy, no middleware, no developer-operated relay.</p>
+  <p>Under the Chrome Web Store User Data Policy, a user-specified server is treated as a client/server relationship: the Limited Use restrictions do not apply to the data you choose to send to the provider <strong>you</strong> specify. See the <a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq" rel="noreferrer">User Data FAQ</a> §15.</p>
+
+  <h3>Your text-to-speech provider (optional)</h3>
+  <p>If you turn on provider-based speech instead of the browser voice, the text to be spoken is sent to the TTS endpoint in your provider pool.</p>
+
+  <h3>Your Scientific PDF bridge (optional, off by default)</h3>
+  <ol>
+    <li>When you start a job, the <strong>full PDF file</strong> and <strong>short-lived provider credentials</strong> (base URL, API key if any, model, language settings, throttle settings) are sent to the <strong>bridge URL you configure</strong>.</li>
+    <li>The default and recommended URL is <strong>loopback only</strong> (<code>http://127.0.0.1:17890</code>). The Options UI warns you if you point it at a non-loopback host.</li>
+    <li>The bridge may forward extracted text to <strong>your</strong> LLM provider. It does not send anything to AnyLLMTranslate operators — there are none.</li>
+    <li>PDF Translate is <strong>opt-in</strong> and requires the bridge. If the bridge is offline or unconfigured, PDF Translate is unavailable; there is no in-browser fallback that bypasses it.</li>
+    <li>Transmissions between the extension and a program running on your own computer are exempt from the Chrome Web Store transmission-encryption requirement (<a href="https://developer.chrome.com/docs/webstore/program-policies/user-data-faq" rel="noreferrer">User Data FAQ</a> §16). Use the loopback default; a remote bridge should be served over HTTPS.</li>
+  </ol>
+
+  <h3>The website you are already on</h3>
+  <p>To translate video subtitles, the extension reads the caption data the page's own player has already loaded, and may re-request the same caption files from the site's own CDN. Those requests go to the site you are visiting, carry only the URL the site itself issued (which may contain that site's own session token), and send no cookies from the extension's background context. The extension never decrypts protected media, never requests a DRM licence, and never touches video or audio streams.</p>
+  <p>When you use the YouTube caption re-alignment feature, the extension fetches the public YouTube watch page and caption track for the video ID you supplied, and loads the video's public thumbnail from <code>i.ytimg.com</code> for display in the settings list.</p>
+</section>
+
+<section id="credentials">
+  <h2>Credential storage</h2>
+  <ul>
+    <li>API keys are stored in <code>chrome.storage.local</code>, encrypted with <strong>AES-256-GCM</strong> (a random 96-bit IV per value, PBKDF2-SHA256 key derivation at 100,000 iterations).</li>
+    <li>The encryption key is derived from your browser profile's extension installation identity plus a per-install random salt, both of which live in the same browser profile as the ciphertext. This protects keys against casual inspection of a storage dump. It is <strong>not</strong> protection against someone who can already read your browser profile — treat your browser profile as the security boundary.</li>
+    <li>Keys are never exposed to page content, never written to logs, and never sent anywhere except the provider endpoint you configured (and your PDF bridge, if you enable it).</li>
+    <li>Settings backups you export yourself do contain your API keys in a password-encrypted archive. Guard those files.</li>
+  </ul>
+</section>
+
+<section id="permissions">
+  <h2>Permissions explained</h2>
+  <table>
+    <thead><tr><th>Permission / scope</th><th>Why it is needed</th></tr></thead>
+    <tbody>
+      <tr><td><code>storage</code></td><td>Save your settings, encrypted API keys, glossaries, and the local translation cache</td></tr>
+      <tr><td><code>contextMenus</code></td><td>Add right-click "Translate page / selection / section / subtitles" and "Open PDF translator" items</td></tr>
+      <tr><td><code>alarms</code></td><td>Keep the service worker alive while a subtitle or PDF translation you started is running, and run a daily local cache eviction</td></tr>
+      <tr><td><code>tabs</code></td><td>Read the active tab's URL so the extension can decide whether the current page is translatable, and reuse an already-open tab when suggesting a site rule</td></tr>
+      <tr><td>Content scripts on all sites</td><td>Read the page's text and caption nodes so they can be translated and displayed in place. This is the core function and the source of Chrome's "read and change all your data on all websites" install warning</td></tr>
+      <tr><td><code>*.max.com</code>, <code>*.hbomax.com</code>, <code>*.hbo.com</code>, <code>*.media.max.com</code>, <code>*.prd.media.max.com</code>, <code>*.delivery.mp.microsoft.com</code></td><td>Fetch the caption files the Max player already uses, so they can be translated</td></tr>
+      <tr><td><code>*.youtube.com</code></td><td>Fetch YouTube caption tracks for subtitle translation and the optional caption re-alignment feature</td></tr>
+      <tr><td><code>*.deeplearning.ai</code></td><td>Fetch DeepLearning.AI lesson caption files</td></tr>
+      <tr><td><code>http://127.0.0.1/*</code>, <code>http://localhost/*</code></td><td>Talk to local LLM runtimes (Ollama, LM Studio) and to the optional local Scientific PDF bridge</td></tr>
+      <tr><td><code>https://inference-api.nousresearch.com/*</code></td><td>Predefined BYOK provider preset. Contacted <strong>only</strong> if you select "Nous Portal" and supply your own key</td></tr>
+      <tr><td>Web-accessible resource: <code>icon/128.png</code></td><td>The in-page selection-translate chip displays the extension's own icon</td></tr>
+    </tbody>
+  </table>
+  <p>There is no <code>activeTab</code> permission, no <code>scripting</code>, <code>debugger</code>, <code>cookies</code>, <code>webRequest</code>, <code>declarativeNetRequest</code>, <code>proxy</code>, <code>history</code>, <code>bookmarks</code>, <code>identity</code>, <code>management</code>, or <code>downloads</code> permission.</p>
+</section>
+
+<section id="statistics">
+  <h2>Local statistics</h2>
+  <p>The extension keeps local usage statistics (characters translated, request counts, cache hits, error counts) so the <strong>Statistics</strong> page can show you your own usage. These counters live in <code>chrome.storage.local</code> and IndexedDB and are <strong>never transmitted</strong>.</p>
+  <p>When <strong>per-site tracking</strong> is enabled (it is on by default), the statistics also record the <strong>hostname</strong> of pages you translate, capped at 25 hosts per day, retained for 90 days, and shown only to you. You can turn this off in <strong>Options → Statistics</strong>, and you can export or erase all statistics at any time from the same page.</p>
+</section>
+
+<section id="children">
+  <h2>Children's privacy</h2>
+  <p>AnyLLMTranslate does not knowingly collect information from children under 13.</p>
+</section>
+
+<section id="changes">
+  <h2>Changes</h2>
+  <p>If this privacy policy changes, the update date at the top will be revised. Continued use after changes constitutes acceptance.</p>
+</section>
+
+<section id="contact">
+  <h2>Contact</h2>
+  <p>For privacy inquiries, please open an issue on the <a href="https://github.com/NguyenSiTrung/AnyLLMTranslate" rel="noreferrer">GitHub repository</a>.</p>
+</section>
+
+<footer>
+  AnyLLMTranslate — Privacy Policy. Hosted on GitHub Pages from <code>docs/guide/</code>. Canonical source: <a href="https://github.com/NguyenSiTrung/AnyLLMTranslate/blob/HEAD/PRIVACY.md" rel="noreferrer">PRIVACY.md</a>.
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -64,6 +64,8 @@ The extension includes dedicated handlers for the platforms below plus a last-re
 
 > Subtitle behavior depends on the site player, available tracks, account and region, and future platform changes. The Generic handler only runs when a dedicated handler does not own the current host.
 
+> **What the subtitle handlers do and do not do.** Every handler reads only the caption text that the page's own player has already loaded for your own logged-in session. The extension does not decrypt or bypass any technical protection measure: there is no Widevine, PlayReady, or ClearKey code, no licence request, no key handling, and no interaction with encrypted media buffers. It never accesses video or audio streams, never downloads or exports media, never blocks or alters playback, and never spoofs a region or a login. It reads no cookies and rewrites no authentication headers. If a caption track is not already available to you in your own session, the extension cannot obtain it.
+
 ## How it works
 
 | Layer                                | Responsibility                                                                                |
@@ -243,14 +245,16 @@ Global commands can be changed at `chrome://extensions/shortcuts`. The inline-in
 
 ## Privacy and security
 
-- **No telemetry:** no developer analytics, advertising, crash reporting, or browsing-history collection.
-- **Local storage:** settings, statistics, translation cache, and encrypted API keys remain in browser storage.
-- **Direct provider requests:** page and subtitle text goes only to the endpoint you configure for translation.
-- **Protected credentials:** API keys are encrypted at rest and are not exposed to page content or the selection UI.
+- **No telemetry:** no developer analytics, advertising, crash reporting, or usage tracking. There is no AnyLLMTranslate server; nothing is transmitted to the developer.
+- **Prominent disclosure and consent:** the first-run setup wizard shows every data type the extension handles and where it goes, and requires an explicit acceptance before anything is translated. The same disclosure is reviewable and revocable in Options → Statistics → Data & privacy.
+- **Local storage:** settings, statistics, glossaries, and the translation cache stay in browser storage. API keys are stored encrypted with AES-256-GCM, keyed from the extension's installation identity and a per-install salt in the same browser profile — treat your browser profile as the security boundary.
+- **Direct provider requests:** page text, selected text, input text, and subtitle text go only to the LLM endpoint you configure for translation.
+- **Site requests:** to translate subtitles, the extension reads the caption files the page's own player has already loaded, and may re-request them from that site's CDN. Those requests go to the site you are already on and carry no cookies.
+- **Protected credentials:** API keys are never exposed to page content, never written to logs, and never sent anywhere except your configured provider (and your PDF bridge, if you enable it).
 - **Extension boundaries:** strict extension-page CSP, origin-checked message bridges, subtitle URL allowlists, and SSRF protections reduce unnecessary exposure.
-- **PDF disclosure:** Scientific PDF jobs send the PDF and short-lived provider credentials to the configured bridge, defaulting to loopback.
+- **PDF disclosure:** Scientific PDF jobs send the PDF and short-lived provider credentials to the configured bridge, defaulting to loopback. Extension-to-local-program traffic is exempt from the Chrome Web Store transmission-encryption requirement; use the loopback default, or HTTPS for a remote bridge.
 
-Read the full [Privacy Policy](PRIVACY.md) before enabling a non-local provider or a non-loopback PDF bridge.
+Read the full [Privacy Policy](PRIVACY.md) before enabling a non-local provider or a non-loopback PDF bridge. Store submission copy and permission justifications live in [docs/store-listing.md](docs/store-listing.md).
 
 ## Contributing
 

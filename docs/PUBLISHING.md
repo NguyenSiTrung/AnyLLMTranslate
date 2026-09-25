@@ -1,90 +1,100 @@
 # Chrome Web Store Publishing Guide
 
-This guide walks you through the step-by-step process of publishing **AnyLLMTranslate** to the Chrome Web Store.
+This guide walks through publishing **AnyLLMTranslate** to the Chrome Web Store.
+
+> Copy, permission justifications, data-usage answers, screenshot specs, and reviewer Q&A live in [store-listing.md](store-listing.md). Keep that file, [PRIVACY.md](../PRIVACY.md), and the dashboard fields in agreement — a mismatch between them is itself a policy violation.
 
 ---
 
 ## 🛠️ Step 1: Prepare the Extension Bundles
 
-Google Web Store requires a built zip file of your extension. Additionally, since the extension connects to external APIs, reviewers often ask for your original source code to verify security compliance.
+Google requires a built zip of the extension. Because the extension connects to external APIs, reviewers often ask for the original source to verify security compliance.
 
-### 1. Build the Production Extension Zip
-This command compiles and packages the extension in production mode (minified and optimized) into a `.zip` file ready for upload.
+### 1. Build the production zip
+
 ```bash
 pnpm zip
 ```
-*Output location:* `.output/anyllm-translate-<version>-chrome.zip` (version taken from `package.json`; `1.0.0` → `anyllm-translate-1.0.0-chrome.zip`)
 
-### 2. Package the Source Code (Highly Recommended)
-Google reviewers frequently request the unminified source code for auditing extensions that interact with external LLM endpoints. 
+*Output:* `.output/anyllm-translate-<version>-chrome.zip` (version from `package.json`; `1.0.0` → `anyllm-translate-1.0.0-chrome.zip`).
+
+### 2. Prepare a curated source archive
+
+The current `pnpm zip:source` runs `git archive` over every tracked file, which sweeps in agent tooling (`.agents/`, `.claude/`, `.codex/`), Conductor state (`conductor/`), ~50 planning documents under `docs/superpowers/`, the internal `docs/hbomax-subtitle-risk-audit.md`, and `.beads/issues.jsonl`. None of that helps a reviewer, and the internal audit notes actively invite questions about scraping paid platforms.
+
+Until the script is narrowed, build the reviewer archive by hand from an allow-list:
+
 ```bash
-pnpm zip:source
+git archive -o source-code.zip HEAD \
+  entrypoints content inject services lib stores ui styles public types \
+  wxt.config.ts package.json pnpm-lock.yaml tsconfig.json vitest.config.ts \
+  eslint.config.mjs LICENSE PRIVACY.md README.md docs/scientific-pdf-bridge-api.md
 ```
-*Output location:* `source-code.zip` (in the root directory)
-*How it works:* It uses `git archive` to package only files tracked by git, ensuring no `node_modules`, build artifacts, secrets, or untracked local configurations are included. Keep this zip ready to upload if requested by the reviewer.
+
+The archive must still be complete enough to build: if you drop a directory, keep the build reproducible from what remains.
 
 ---
 
-## 🎨 Step 2: Prepare Store Assets
-
-Before creating the listing, make sure you have the following assets ready:
+## 🎨 Step 2: Store Assets
 
 | Asset | Size / Format | Requirement | Notes |
 |-------|---------------|-------------|-------|
-| **Extension Icon** | `128x128px` (PNG) | **Required** | Already located in `public/icon/128.png` |
-| **Store Tile Icon** | `128x128px` (PNG) | **Required** | The same or a slightly modified version of the main icon |
-| **Screenshots** | `1280x800px` or `640x400px` (PNG/JPEG) | **Required** | At least 1 is mandatory (up to 5). Show options/popup UI and the bilingual translation inside a webpage. |
-| **Promo Banners** | `440x280px` (PNG) | *Optional* | Recommended for better discoverability |
+| Extension icon | `128x128` PNG | **Required** | `public/icon/128.png` |
+| Screenshots | `1280x800` PNG | **Required** | 1–5. Missing screenshots is an automatic rejection. See the capture runbook in [store-listing.md](store-listing.md) §5. |
+| Promo tile | `440x280` PNG | Optional | Improves discoverability |
+
+**Screenshot content rules:** show the product working; no streaming-service UI; no real API keys or personal data.
 
 ---
 
-## 📝 Step 3: Developer Console Listing Checklist
+## 📝 Step 3: Listing Metadata
 
-Access the [Chrome Web Store Developer Console](https://chrome.google.com/webstore/devconsole).
+Use [store-listing.md](store-listing.md) §1–2 for the name, short description, category, single-purpose statement, and long description.
 
-### 1. Basic Metadata
-*   **Product Name:** `AnyLLMTranslate` (Keep trademarks like "OpenAI" or "ChatGPT" out of the main title to avoid automated rejections).
-*   **Description:** Clear and concise explanation. Explicitly specify that this is a **"Bring Your Own Key" (BYOK)** extension so users know they need an API key from an LLM provider (e.g. OpenAI, OpenRouter, self-hosted, etc.).
+*   **Product name:** `AnyLLMTranslate`. Keep trademarks out of the title.
+*   **Short description:** comes from `manifest.description` in [wxt.config.ts](../wxt.config.ts), capped at 132 characters.
+*   **Single purpose:** the one-line statement in [store-listing.md](store-listing.md) §1.
+*   **Privacy policy URL:** `https://nguyensitrung.github.io/AnyLLMTranslate/guide/privacy.html`
 
-### 2. Privacy Policy URL
-Google requires a public privacy policy because the extension reads and translates webpage content.
-*   Host the content of the root [PRIVACY.md](../PRIVACY.md) on a public URL (e.g. GitHub Pages or a raw GitHub link).
-*   Provide that link in the **Privacy Policy URL** input box.
+### Privacy policy hosting
+
+`docs/guide/privacy.html` is the hosted, rendered form of [PRIVACY.md](../PRIVACY.md). It is deployed by [.github/workflows/pages.yml](../.github/workflows/pages.yml), which stages everything under `docs/guide/` to GitHub Pages. The workflow triggers on any change to `docs/guide/**`, so editing the privacy page redeploys it.
+
+**Edit both files together.** `PRIVACY.md` is the canonical source; `privacy.html` is what the dashboard links to. They must say the same thing.
 
 ---
 
 ## 🛡️ Step 4: Permissions & Data Disclosures
 
-During submission, you must justify your permissions and declare data usage.
+Full text for every field is in [store-listing.md](store-listing.md) §3 (permissions) and §4 (data usage).
 
-### 1. Permission Justifications
-Use these explanations in the console for each permission declared in [wxt.config.ts](../wxt.config.ts):
+Summary of what the manifest declares:
 
-*   **`activeTab`:** *"To read the text content of the active tab for translation when explicitly triggered by the user."*
-*   **`storage`:** *"To store translation cache, layout settings, and API credentials locally in the browser."*
-*   **`contextMenus`:** *"To show a right-click 'Translate' option when the user highlights text on a webpage."*
-*   **`tabs`:** *"To read the active tab's URL so the extension can decide whether a page is translatable and route the correct translator, including when the options page is open."*
-*   **`alarms`:** *"To schedule minor background sync/cache-cleaning routines."*
+*   **`storage`** — settings, encrypted API credentials, glossaries, local translation cache.
+*   **`contextMenus`** — right-click translate entries.
+*   **`alarms`** — (1) keep the MV3 service worker alive while a subtitle or PDF translation the user started is running; (2) a daily local cache eviction. Both cleared when no session remains.
+*   **`tabs`** — read the active tab's URL to decide whether the page is translatable, and reuse an open tab when suggesting a site rule.
+*   **Host permissions** — caption fetching on the supported video hosts, loopback for local LLM runtimes and the optional PDF bridge, and one predefined BYOK provider preset.
+*   **Web-accessible resources** — `icon/128.png` only.
 
-For **host permissions**, justify in the console:
-*   **`*://*.youtube.com/*`, `*://*.max.com/*`, `*://*.hbomax.com/*` (and related CDN edges such as `*.prd.media.max.com`, `*.hbo.com`, `*.delivery.mp.microsoft.com`):** *"To fetch subtitle/caption data and translate them on supported video sites when the user enables subtitle translation."*
-*   **`http://127.0.0.1/*`, `http://localhost/*`:** *"Loopback-only access to the user's optional local Scientific PDF translation bridge (Docker)."*
-*   **`https://inference-api.nousresearch.com/*`:** *"Predefined BYOK provider option; contacted only if the user selects it and supplies a key."*
-
-### 2. Data Usage Disclosures
-Under the **Data Usage** section, fill in the following:
-*   **Data Collection:** Select **"Yes"** to using Webpage Content (user activity) because the extension reads page content to translate it.
-*   **Justification:** Explain: *"The extension reads webpage text content, passes it to the user's custom-configured API provider for translation, and displays the response to the user. No webpage content is collected, stored, or transmitted to servers owned by the extension developers."*
-*   **Data Safety:** Confirm that data is sent only to the user's chosen API provider, is not sold, is not used for unrelated purposes, and is not used for credit assessment.
+**`activeTab` is intentionally not requested.** It has no call site, and the CWS minimum-permission policy forbids declaring permissions the extension does not need. Do not re-add it without adding a call site.
 
 ---
 
 ## 🚀 Step 5: Submit for Review
 
 1. Create a developer account and pay the one-time **$5 USD** fee.
-2. Complete verification.
-3. Upload `.output/anyllm-translate-chrome-mv3.zip`.
-4. Fill out the Store Listing, Privacy page, and justifications.
-5. Submit for Review.
+2. Enable **2-Step Verification** — required before publishing.
+3. Upload `.output/anyllm-translate-<version>-chrome.zip`.
+4. Fill in the Store Listing, Privacy practices, and permission justifications from [store-listing.md](store-listing.md).
+5. Submit for review.
 
-*Review Timeline:* The content script runs on `<all_urls>` and the manifest declares `tabs`, so Chrome shows the "Read and change all your data on all websites" warning and the listing typically receives a **manual review**. Expect days to a few weeks; there is no guaranteed automated timeline.
+*Review timeline:* the content script matches `<all_urls>` and the manifest declares `tabs`, so Chrome shows the "Read and change all your data on all websites" warning and the listing typically receives a **manual review**. Expect days to a few weeks.
+
+---
+
+## 📋 Step 6: Post-approval
+
+*   Keep the privacy policy, dashboard fields, and extension behaviour in sync on every release.
+*   A release that adds a permission forces every existing user to re-consent; add optional permissions via `optional_host_permissions` plus `chrome.permissions.request()` instead of widening the required set.
+*   Re-run the pre-submission checklist in [store-listing.md](store-listing.md) §7 before each update.
