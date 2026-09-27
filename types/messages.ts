@@ -5,7 +5,7 @@
 
 import type { SubtitleCue, AvailableSubtitleTrack } from './subtitle';
 import type { SubtitleSegmentFetchTemplate } from './subtitle';
-import type { PageContext } from './config';
+import type { PageContext, SubtitleTranslationMode } from './config';
 import type { SubtitleProfile, ProfileKnobs } from '@/lib/subtitleProfiles';
 import type { DomOutline, SuggestSiteRuleDraft } from '@/lib/siteRuleSuggest/types';
 
@@ -159,6 +159,12 @@ export interface TranslateSubtitleMessage {
   sessionId?: number;
   /** Skip per-film name pre-scan (manifest/seek deltas; glossary already warm). */
   skipFilmPreScan?: boolean;
+  /** Requested translation mode. Absent means 'progressive'. The background
+   *  validates eligibility and may downgrade — it never trusts this alone. */
+  translationMode?: SubtitleTranslationMode;
+  /** Set only by the full-file activation path: the caller is handing over the
+   *  complete track. Delta paths (manifest/DOM/MSE) never set this. */
+  completeTrack?: boolean;
 }
 
 /** Popup → content: set or clear the active tab's per-subtitle translation-style override. */
@@ -244,6 +250,26 @@ export interface SubtitleChunkFailedMessage {
   action: 'SUBTITLE_CHUNK_FAILED';
   chunkStart: number;
   sessionId: number | null;
+}
+
+/** Plus mode: run progress (counts only — never cue data). */
+export interface SubtitlePlusProgressMessage {
+  action: 'SUBTITLE_PLUS_PROGRESS';
+  sessionId: number;
+  phase: 'translating';
+  completedChunks: number;
+  totalChunks: number;
+}
+
+/** Plus mode: terminal message, always sent so the coordinator is never left
+ *  waiting. 'failed' means every chunk failed — keep original captions. */
+export interface SubtitlePlusCompleteMessage {
+  action: 'SUBTITLE_PLUS_COMPLETE';
+  sessionId: number;
+  outcome: 'complete' | 'failed';
+  cues: SubtitleCue[];
+  partial: boolean;
+  failedChunkIndices: number[];
 }
 
 /** Priority queue request from content script → background */

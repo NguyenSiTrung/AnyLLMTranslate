@@ -461,6 +461,15 @@ export interface YoutubeAsrResegmentSettings {
   aiEnable: boolean;
 }
 
+/**
+ * Subtitle translation mode.
+ * - 'progressive' (default): chunk 0 renders immediately, the rest stream in.
+ * - 'plus': freeze one terminology set, translate in parallel, reveal on
+ *   completion. Only applies to sources that hand over the complete track.
+ * Absent/undefined always means 'progressive'.
+ */
+export type SubtitleTranslationMode = 'progressive' | 'plus';
+
 /** Subtitle display settings */
 export interface SubtitleSettings {
   /** Subtitle position on video */
@@ -507,6 +516,13 @@ export interface SubtitleSettings {
    * Default: `{ enable: true, aiEnable: false }`. Deep-merged on load.
    */
   youtubeAsrResegment?: YoutubeAsrResegmentSettings;
+  /**
+   * Whole-track quality mode for sources that provide the complete track at
+   * activation. Undefined means 'progressive' (pre-Plus behaviour).
+   */
+  translationMode?: SubtitleTranslationMode;
+  /** One-time Plus discoverability hint dismissal (absent = not dismissed). */
+  plusHintDismissed?: boolean;
 }
 
 /** Custom theme user-defined configuration */
@@ -809,6 +825,7 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
   enableGenericSubtitleHandler: true,
   knobOverrides: {},
   youtubeAsrResegment: { ...DEFAULT_YOUTUBE_ASR_RESEGMENT_SETTINGS },
+  translationMode: 'progressive',
 };
 
 /**
