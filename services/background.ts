@@ -701,6 +701,9 @@ const releaseSemaphore = semaphore.release;
  *  Shared with the overlay via lib/constants so chunk-boundary math stays in sync. */
 const CHUNK_SIZE = SUBTITLE_CHUNK_SIZE;
 
+/** Context cues (before + after a chunk) fed to the LLM for coherence. */
+const CONTEXT_SIZE = 3;
+
 /** Dedicated PDF semaphore: max 2 concurrent, queue 6 — isolated from page/subtitle */
 const PDF_MAX_CONCURRENT = 2;
 const PDF_MAX_QUEUE = 6;
@@ -1311,6 +1314,127 @@ function normalizeTranslatedSubtitleText(text: string): string {
 }
 
 
+/**
+ * Plus run: translate every chunk against the frozen terminology set with a
+ * bounded worker pool, then send ONE terminal message. No cue data leaves the
+ * background until that terminal message, so the overlay cannot show a
+ * partially-prepared track. Cancellation (CANCEL_SUBTITLE_SESSION) stops
+ * workers from claiming further chunks and suppresses the terminal message.
+ */
+function startPlusRun(args: {
+  tabId: number;
+  cues: SubtitleCue[];
+  sessionId: number;
+  requestGeneration: number;
+  frozen: Record<string, string>;
+  frozenBlock: string;
+  translateChunk: (
+    chunkCues: SubtitleCue[],
+    contextCues: SubtitleCue[],
+    options?: ChunkTranslateOptions,
+  ) => Promise<SubtitleCue[]>;
+}): void {
+  const { tabId, cues, sessionId, requestGeneration } = args;
+  const totalChunks = Math.ceil(cues.length / CHUNK_SIZE);
+  const results = new Array<SubtitleCue[]>(totalChunks);
+  const failedChunkIndices: number[] = [];
+  let nextIndex = 0;
+  let completedChunks = 0;
+
+  const session: TranslationSession = {
+    queue: [],
+    // Plus ignores playback priority by design: "finish the file, then show it"
+    // has no notion of a nearer chunk.
+    setPriority: () => {},
+    sessionId,
+    cancelled: false,
+  };
+  activeSessions.set(tabId, session);
+  registerTabSession(tabId, session);
+  ensureKeepaliveAlarm();
+
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      if (session.cancelled) return;
+      if (sessionGenerationFor(tabId) !== requestGeneration) {
+        session.cancelled = true;
+        return;
+      }
+      const i = nextIndex;
+      nextIndex += 1;
+      if (i >= totalChunks) return;
+
+      const start = i * CHUNK_SIZE;
+      const chunkCues = cues.slice(start, start + CHUNK_SIZE);
+      const preceding = cues.slice(Math.max(0, start - CONTEXT_SIZE), start);
+      const following = cues.slice(start + CHUNK_SIZE, start + CHUNK_SIZE + CONTEXT_SIZE);
+      try {
+        results[i] = await args.translateChunk(chunkCues, [...preceding, ...following], {
+          mode: 'plus',
+          frozen: args.frozen,
+          frozenBlock: args.frozenBlock,
+        });
+      } catch (error) {
+        console.warn('AnyLLMTranslate: Plus chunk translation failed', error);
+        results[i] = chunkCues.map((cue) => ({ ...cue }));
+        failedChunkIndices.push(i);
+      }
+      completedChunks += 1;
+      try {
+        chrome.tabs.sendMessage(tabId, {
+          action: 'SUBTITLE_PLUS_PROGRESS',
+          sessionId,
+          phase: 'translating',
+          completedChunks,
+          totalChunks,
+        });
+      } catch {
+        /* tab gone — nothing to update */
+      }
+    }
+  };
+
+  void (async () => {
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(MAX_CONCURRENT, totalChunks) }, () => worker()),
+      );
+      if (session.cancelled) return;
+      const flattened: SubtitleCue[] = [];
+      for (const chunk of results) {
+        if (chunk) flattened.push(...chunk);
+      }
+      failedChunkIndices.sort((a, b) => a - b);
+      chrome.tabs.sendMessage(tabId, {
+        action: 'SUBTITLE_PLUS_COMPLETE',
+        sessionId,
+        outcome: failedChunkIndices.length === totalChunks ? 'failed' : 'complete',
+        cues: flattened,
+        partial: failedChunkIndices.length > 0,
+        failedChunkIndices,
+      });
+    } catch (error) {
+      console.warn('AnyLLMTranslate: Plus run failed', error);
+      try {
+        chrome.tabs.sendMessage(tabId, {
+          action: 'SUBTITLE_PLUS_COMPLETE',
+          sessionId,
+          outcome: 'failed',
+          cues: [],
+          partial: true,
+          failedChunkIndices: [],
+        });
+      } catch {
+        /* tab gone */
+      }
+    } finally {
+      if (activeSessions.get(tabId) === session) activeSessions.delete(tabId);
+      unregisterTabSession(tabId, session);
+      clearKeepaliveAlarm();
+    }
+  })();
+}
+
 /** Handle translateSubtitle message */
 async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
@@ -1422,8 +1546,6 @@ async function handleTranslateSubtitle(
     if (tabId !== undefined && filmGlossary && Object.keys(filmGlossary).length > 0) {
       await writeNamedGlossarySuggestions(tabId, filmGlossary);
     }
-
-    const CONTEXT_SIZE = 3;
 
     // Per-session rolling proper-noun glossary. Accumulates across chunks:
     // each chunk's extracted properNouns are merged in, and the formatted
@@ -1693,6 +1815,15 @@ async function handleTranslateSubtitle(
       const totalChunks = Math.ceil(cues.length / CHUNK_SIZE);
       if (tabId !== undefined) {
         await writeNamedGlossarySuggestions(tabId, plusRun.frozen);
+        startPlusRun({
+          tabId,
+          cues,
+          sessionId,
+          requestGeneration,
+          frozen: plusRun.frozen,
+          frozenBlock: plusRun.block,
+          translateChunk,
+        });
       }
       return {
         success: true,

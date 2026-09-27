@@ -190,3 +190,200 @@ describe('handleTranslateSubtitle — Plus preflight', () => {
     expect(preScanNames).not.toHaveBeenCalled();
   });
 });
+
+function sentActions(): string[] {
+  return (chrome.tabs.sendMessage as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(
+    (call) => (call[1] as { action?: string }).action ?? '',
+  );
+}
+
+function sentMessages(action: string): Array<Record<string, unknown>> {
+  return (chrome.tabs.sendMessage as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    .map((call) => call[1] as Record<string, unknown>)
+    .filter((msg) => msg.action === action);
+}
+
+describe('handleTranslateSubtitle — Plus run', () => {
+  beforeEach(async () => {
+    // Same reset block as the preflight describe, plus a fetch that echoes each
+    // requested id so every chunk succeeds.
+    for (const key of Object.keys(mockStorage)) delete mockStorage[key];
+    mockStorage[SETTINGS_KEY] = { translationMode: 'plus' };
+    preScanNames.mockReset().mockResolvedValue({ Alice: 'A-lít' });
+    loadScoped.mockReset().mockResolvedValue(undefined);
+    saveScoped.mockReset().mockResolvedValue(undefined);
+    const { __resetSettingsCacheForTest, __resetTranslationServiceForTest, __resetSubtitleSessionCounterForTest, __resetSemaphoreForTest, __getActiveSessionCountForTest } = await import('../background');
+    // A preflight test acks before its Plus run settles, so a run can still be
+    // in flight when this describe starts. Let it finish first, otherwise its
+    // progress/terminal sends land after the mockClear below and inflate this
+    // test's message counts.
+    await vi.waitFor(() => expect(__getActiveSessionCountForTest()).toBe(0), { timeout: 10_000 });
+    vi.mocked(chrome.tabs.sendMessage).mockClear();
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body?: string }) => {
+      const body = JSON.parse(init.body ?? '{}') as { messages: Array<{ content: string }> };
+      const userPrompt = body.messages[1]?.content ?? '';
+      const ids = [...userPrompt.matchAll(/\"?(s\d+)\"?\s*:/g)].map((m) => m[1]);
+      const translations: Record<string, string> = {};
+      for (const id of ids) translations[id] = `vi-${id}`;
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({
+          id: 'test',
+          choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations, properNouns: {} }) }, finish_reason: 'stop' }],
+        }),
+        text: () => Promise.resolve(''),
+      };
+    }));
+    __resetSettingsCacheForTest();
+    __resetTranslationServiceForTest();
+    __resetSubtitleSessionCounterForTest();
+    __resetSemaphoreForTest();
+    OpenAICompatibleService.__setRetryBackoffForTest(true);
+  });
+
+  it('sends the frozen block to every chunk, one progress per chunk, then one terminal message', async () => {
+    const { handleMessage } = await import('../background');
+    await handleMessage(
+      { action: 'translateSubtitle', cues: cuesOf(SUBTITLE_CHUNK_SIZE * 2 + 1), sourceLanguage: 'en', targetLanguage: 'vi', translationMode: 'plus', completeTrack: true },
+      SENDER,
+    );
+
+    await vi.waitFor(() => expect(sentActions()).toContain('SUBTITLE_PLUS_COMPLETE'), { timeout: 10_000 });
+
+    const progress = sentMessages('SUBTITLE_PLUS_PROGRESS');
+    expect(progress).toHaveLength(3);
+    expect(progress.at(-1)).toMatchObject({ completedChunks: 3, totalChunks: 3, phase: 'translating' });
+
+    const [terminal] = sentMessages('SUBTITLE_PLUS_COMPLETE');
+    expect(terminal).toMatchObject({ outcome: 'complete', partial: false, failedChunkIndices: [] });
+    expect((terminal.cues as SubtitleCue[]).length).toBe(SUBTITLE_CHUNK_SIZE * 2 + 1);
+
+    // Every chunk prompt carried the frozen block; no rolling block was sent.
+    const fetchMock = fetch as unknown as { mock: { calls: Array<[string, { body: string }]> } };
+    for (const [, init] of fetchMock.mock.calls) {
+      const system = (JSON.parse(init.body) as { messages: Array<{ content: string }> }).messages[0].content;
+      if (system.includes('proper-noun extractor')) continue;
+      expect(system).toContain('Frozen terminology for this track');
+      expect(system).not.toContain('Previously translated names in this content');
+    }
+
+    // FR-12 repair passes append a distinct instruction to the system prompt;
+    // they are follow-ups within a chunk, not chunk requests. Compare only the
+    // base prompt so this asserts the frozen system prompt is chunk-invariant.
+    const systems = fetchMock.mock.calls
+      .map(([, init]) => (JSON.parse(init.body) as { messages: Array<{ content: string }> }).messages[0].content)
+      .filter((system) => !system.includes('Repair pass'));
+    expect(new Set(systems).size).toBe(1);
+  });
+
+  it('never sends progressive chunk deltas during a Plus run', async () => {
+    const { handleMessage } = await import('../background');
+    await handleMessage(
+      { action: 'translateSubtitle', cues: cuesOf(SUBTITLE_CHUNK_SIZE * 2), sourceLanguage: 'en', targetLanguage: 'vi', translationMode: 'plus', completeTrack: true },
+      SENDER,
+    );
+    await vi.waitFor(() => expect(sentActions()).toContain('SUBTITLE_PLUS_COMPLETE'), { timeout: 10_000 });
+    expect(sentActions()).not.toContain('SUBTITLE_CHUNK_TRANSLATED');
+    expect(sentActions()).not.toContain('SUBTITLE_CHUNK_FAILED');
+  });
+
+  it('commits with partial:true and source text when one chunk fails all retries', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body?: string }) => {
+      const body = JSON.parse(init.body ?? '{}') as { messages: Array<{ content: string }> };
+      const userPrompt = body.messages[1]?.content ?? '';
+      // Chunk 1 covers cues 25-49, so only its prompt contains "line 30".
+      // Content-based, not call-order-based: the pool runs chunks in parallel.
+      if (userPrompt.includes('line 30')) throw new Error('network down');
+      const ids = [...userPrompt.matchAll(/\"?(s\d+)\"?\s*:/g)].map((m) => m[1]);
+      const translations: Record<string, string> = {};
+      for (const id of ids) translations[id] = `vi-${id}`;
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({
+          id: 'test',
+          choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations, properNouns: {} }) }, finish_reason: 'stop' }],
+        }),
+        text: () => Promise.resolve(''),
+      };
+    }));
+
+    const { handleMessage } = await import('../background');
+    await handleMessage(
+      { action: 'translateSubtitle', cues: cuesOf(SUBTITLE_CHUNK_SIZE * 2), sourceLanguage: 'en', targetLanguage: 'vi', translationMode: 'plus', completeTrack: true },
+      SENDER,
+    );
+    await vi.waitFor(() => expect(sentActions()).toContain('SUBTITLE_PLUS_COMPLETE'), { timeout: 10_000 });
+
+    const [terminal] = sentMessages('SUBTITLE_PLUS_COMPLETE');
+    const cues = terminal.cues as SubtitleCue[];
+    expect(terminal.partial).toBe(true);
+    expect(terminal.outcome).toBe('complete');
+    expect(terminal.failedChunkIndices).toEqual([1]);
+    // The failed chunk keeps source text; the successful chunk carries the translation.
+    expect(cues[SUBTITLE_CHUNK_SIZE].text).toBe(`line ${SUBTITLE_CHUNK_SIZE}`);
+    expect(cues[0].text).toBe('vi-s1');
+  });
+
+  it('sends outcome:failed when every chunk fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
+    const { handleMessage } = await import('../background');
+    await handleMessage(
+      { action: 'translateSubtitle', cues: cuesOf(SUBTITLE_CHUNK_SIZE * 2), sourceLanguage: 'en', targetLanguage: 'vi', translationMode: 'plus', completeTrack: true },
+      SENDER,
+    );
+    await vi.waitFor(() => expect(sentActions()).toContain('SUBTITLE_PLUS_COMPLETE'), { timeout: 10_000 });
+    const [terminal] = sentMessages('SUBTITLE_PLUS_COMPLETE');
+    expect(terminal.outcome).toBe('failed');
+  });
+
+  it('sends no terminal message when the run is cancelled', async () => {
+    // Gate every request so the cancel lands while chunks are genuinely in
+    // flight; a fast mock would let the whole run finish first and make the
+    // assertion vacuous.
+    const gate: { release: () => void } = { release: () => {} };
+    const wait = new Promise<void>((resolve) => {
+      gate.release = resolve;
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      await wait;
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: () => Promise.resolve({
+          id: 'test',
+          choices: [{ message: { role: 'assistant', content: JSON.stringify({ translations: {}, properNouns: {} }) }, finish_reason: 'stop' }],
+        }),
+        text: () => Promise.resolve(''),
+      };
+    }));
+
+    const { handleMessage, __getActiveSessionCountForTest } = await import('../background');
+    await handleMessage(
+      { action: 'translateSubtitle', cues: cuesOf(SUBTITLE_CHUNK_SIZE * 4), sourceLanguage: 'en', targetLanguage: 'vi', translationMode: 'plus', completeTrack: true },
+      SENDER,
+    );
+    await handleMessage({ action: 'CANCEL_SUBTITLE_SESSION' }, SENDER);
+    gate.release();
+
+    // Wait for the run to actually finish before asserting the absence of a
+    // terminal message — otherwise a later terminal send would be missed.
+    await vi.waitFor(() => expect(__getActiveSessionCountForTest()).toBe(0), { timeout: 10_000 });
+    expect(sentActions()).not.toContain('SUBTITLE_PLUS_COMPLETE');
+  });
+
+  it('leaves the scoped namespace untouched on a progressive request', async () => {
+    mockStorage[SETTINGS_KEY] = { translationMode: 'progressive' };
+    const { handleMessage } = await import('../background');
+    await handleMessage(
+      { action: 'translateSubtitle', cues: cuesOf(SUBTITLE_CHUNK_SIZE), sourceLanguage: 'en', targetLanguage: 'vi' },
+      SENDER,
+    );
+    expect(loadScoped).not.toHaveBeenCalled();
+    expect(saveScoped).not.toHaveBeenCalled();
+  });
+});
