@@ -163,6 +163,7 @@ export class OpenAICompatibleService implements TranslationService {
             request.glossaryBlock,
             request.rollingGlossaryBlock,
             request.namedListGlossaryBlock,
+            request.frozenGlossaryBlock,
           )
         : buildSystemPrompt(
             request.targetLanguage,

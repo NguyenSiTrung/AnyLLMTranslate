@@ -62,6 +62,9 @@ export interface TranslationRequest {
   /** Rolling proper-noun glossary block for subtitle cross-chunk continuity.
    *  Injected into the subtitle system prompt after the user's global glossary. */
   rollingGlossaryBlock?: string;
+  /** Frozen terminology block for Plus mode. Injected after the rolling
+   *  glossary block. Progressive requests never set it. */
+  frozenGlossaryBlock?: string;
   /** When set, the service uses this string verbatim as the system prompt and
    *  skips both buildSystemPrompt and buildSubtitleSystemPrompt. Used by the
    *  per-film pre-scan (services/subtitleNameScanner.ts) to inject its own

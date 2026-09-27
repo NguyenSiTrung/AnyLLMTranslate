@@ -26,3 +26,13 @@ export function formatRollingGlossary(glossary: Map<string, string>): string {
   );
   return `Previously translated names in this content (use these consistently):\n${lines.join('\n')}`;
 }
+
+/** Format a frozen terminology set for prompt injection. Returns '' when empty.
+ *  Distinct copy from the rolling glossary: these terms were decided before
+ *  translation began, not accumulated from earlier chunks. */
+export function formatFrozenGlossary(frozen: Record<string, string>): string {
+  const entries = Object.entries(frozen).filter(([source, target]) => source.trim() && target.trim());
+  if (entries.length === 0) return '';
+  const lines = entries.map(([source, target]) => `- "${source}" → "${target}"`);
+  return `Frozen terminology for this track (use these consistently):\n${lines.join('\n')}`;
+}

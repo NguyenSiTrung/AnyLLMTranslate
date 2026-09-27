@@ -56,6 +56,7 @@ export function buildSubtitleSystemPrompt(
   glossaryBlock?: string,
   rollingGlossaryBlock?: string,
   namedListGlossaryBlock?: string,
+  frozenGlossaryBlock?: string,
 ): string {
   const targetLanguageName = getLanguageName(targetLanguage);
   const displayTargetLanguage = targetLanguageName !== targetLanguage
@@ -96,6 +97,12 @@ export function buildSubtitleSystemPrompt(
   // Part C3 — rolling proper-noun glossary (per-session continuity).
   if (rollingGlossaryBlock) {
     prompt += '\n\n' + rollingGlossaryBlock;
+  }
+
+  // Part C4 — frozen terminology (Plus mode only). Injected after the rolling
+  // glossary because it is authoritative for the run, not accumulated.
+  if (frozenGlossaryBlock) {
+    prompt += '\n\n' + frozenGlossaryBlock;
   }
 
   // Part D — JSON contract.
