@@ -45,7 +45,7 @@ import type {
   SubtitleManifestCuesPayload,
   SubtitleMpdProcessingPayload,
 } from '@/types/subtitle';
-import type { PageContext, SubtitleSettings } from '@/types/config';
+import type { PageContext, SubtitleSettings, SubtitleTranslationMode } from '@/types/config';
 import type { OverlayConfig } from '@/content/subtitleOverlay';
 import { extractPageContext, resolveCategory, triggerAutoCategoryDetection } from '@/content/utils/pageContext';
 import {
@@ -87,7 +87,11 @@ import type {
   AsrRealignProgressMessage,
   GetAsrRealignCacheResult,
   ResegmentYoutubeAsrResult,
+  SubtitlePlusCompleteMessage,
+  SubtitlePlusProgressMessage,
 } from '@/types/messages';
+import { resolveSubtitleTranslationMode } from '@/lib/subtitlePlusEligibility';
+import { SubtitlePlusRun } from '@/content/subtitlePlusRun';
 
 /** Resolve the subtitle profile for the current page from its hostname.
  *  Called per outbound translateSubtitle message; resolveProfile is a cheap
@@ -424,6 +428,8 @@ interface CoordinatorState {
   categoryOverride: string | undefined;
   /** Temporary tab-scoped translation-knob override from popup (resets on reload/nav). */
   subtitleKnobOverride: Partial<ProfileKnobs> | undefined;
+  /** Per-session Plus-mode override (mini studio). Undefined = follow settings. */
+  subtitleModeOverride: SubtitleTranslationMode | undefined;
   /** Active subtitle session ID — stale chunks with different IDs are dropped */
   activeSubtitleSessionId: number | null;
   /** Active subtitle source tier — first full-track source to resolve wins (precedence: manifest > texttrack > mse > dom) */
@@ -519,6 +525,7 @@ const state: CoordinatorState = {
   videoIsPlaying: false,
   categoryOverride: undefined,
   subtitleKnobOverride: undefined,
+  subtitleModeOverride: undefined,
   activeSubtitleSessionId: null,
   activeSource: null,
   activeRenderer: null,
@@ -558,6 +565,9 @@ const state: CoordinatorState = {
   mpdDomFallbackTimer: null,
   playbackAnchorTime: null,
 };
+
+/** Active Plus run controller, if any. Routes the two push messages. */
+let activePlusRun: SubtitlePlusRun | null = null;
 
 /** Current video time for translation ordering (seek anchor wins over live time). */
 function getPlaybackTimeForTranslation(): number {
@@ -1225,24 +1235,39 @@ async function activateOverlayWithParsedCues(options: {
   // buffer with the complete source track so untranslated cues remain visible.
   state.translatedCues = [...cues];
 
-  // Always (re)apply native hide: proactive YouTube can start overlay while
-  // CC is already painting, and a prior overlay session may have skipped hide.
-  const domSource = handler?.getDomCueSource?.();
-  if (domSource) {
-    hideNativeCaptions(domSource.captionWindowSelector, 'display');
-  } else {
-    applyNativeCaptionHideForHandler(handler);
+  // Plus keeps the site's own captions visible while it prepares: nothing is
+  // published until the terminal message, so hiding them would leave the user
+  // with no subtitles at all. Progressive hides immediately, as today.
+  const plusMode = currentTranslationMode(settings.subtitleSettings) === 'plus';
+  if (!plusMode) {
+    // Always (re)apply native hide: proactive YouTube can start overlay while
+    // CC is already painting, and a prior overlay session may have skipped hide.
+    const domSource = handler?.getDomCueSource?.();
+    if (domSource) {
+      hideNativeCaptions(domSource.captionWindowSelector, 'display');
+    } else {
+      applyNativeCaptionHideForHandler(handler);
+    }
   }
   if (!state.isOverlayMode) {
-    console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
+    if (!plusMode) {
+      console.log('AnyLLMTranslate: Activating overlay mode for progressive translation');
+    }
     const savedPrefs = await initializeControls();
     if (isStaleActivation()) return unblockStaleIntercept();
     state.isOverlayMode = true;
     const overlayConfig = buildSubtitleOverlayConfig(settings.subtitleSettings, savedPrefs);
-    const attached = await initializeActiveRenderer(cues, overlayConfig);
-    if (!attached) scheduleRendererAttachmentRetry();
+    if (plusMode) {
+      // Plus defers the renderer attach to the terminal commit, which publishes
+      // through updateActiveRendererCues → initializeActiveRenderer. Store the
+      // config so that path can attach on a fresh Plus activation.
+      state.rendererConfig = overlayConfig;
+    } else {
+      const attached = await initializeActiveRenderer(cues, overlayConfig);
+      if (!attached) scheduleRendererAttachmentRetry();
+    }
     if (isStaleActivation()) return unblockStaleIntercept();
-  } else {
+  } else if (!plusMode) {
     updateActiveRendererCues(cues);
   }
 
@@ -1250,7 +1275,13 @@ async function activateOverlayWithParsedCues(options: {
   state.activeSubtitleSessionId = sessionId;
   const stillOwnsSession = () => state.activeSubtitleSessionId === sessionId;
 
-  showSubtitleToast('Preparing subtitles (indexing names on first view)...', true);
+  const mode = currentTranslationMode(settings.subtitleSettings);
+  showSubtitleToast(
+    mode === 'plus'
+      ? 'Preparing full translation…'
+      : 'Preparing subtitles (indexing names on first view)...',
+    true,
+  );
   const pageContext = await buildSubtitlePageContext();
   if (isStaleActivation() || !stillOwnsSession()) return unblockStaleIntercept();
 
@@ -1265,9 +1296,22 @@ async function activateOverlayWithParsedCues(options: {
       profile: currentSubtitleProfile(),
       knobOverrides: state.subtitleKnobOverride,
       sessionId,
-    })) as { success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number };
+      translationMode: mode,
+      completeTrack: true,
+    })) as {
+      success: boolean;
+      cues?: SubtitleCue[];
+      error?: string;
+      sessionId?: number;
+      mode?: SubtitleTranslationMode;
+      downgradeReason?: string;
+      totalChunks?: number;
+    };
 
     if (isStaleActivation() || !stillOwnsSession()) return unblockStaleIntercept();
+    // `cues` is kept in the guard for the progressive path: a response without
+    // cues is a failure there. The Plus ack carries `cues: []`, which is
+    // truthy, so it passes through to the mode branch below.
     if (!response?.success || !response.cues) {
       console.warn('AnyLLMTranslate: Translation failed', response?.error);
       if (intercept) {
@@ -1279,17 +1323,36 @@ async function activateOverlayWithParsedCues(options: {
       return false;
     }
 
+    if (response.sessionId !== undefined) {
+      state.activeSubtitleSessionId = response.sessionId;
+    }
+
+    if (response.mode === 'plus' && response.sessionId !== undefined && response.totalChunks) {
+      startPlusRunUi({
+        sessionId: response.sessionId,
+        totalChunks: response.totalChunks,
+        intercept,
+        stillOwnsSession,
+        revealNativeCaptions: () => {
+          const domSource = handler?.getDomCueSource?.();
+          if (domSource) hideNativeCaptions(domSource.captionWindowSelector, 'display');
+          else applyNativeCaptionHideForHandler(handler);
+        },
+      });
+      return true;
+    }
+
+    if (response.downgradeReason) {
+      showSubtitleToast(downgradeNotice(response.downgradeReason));
+    }
+
     if (intercept) {
       sendTranslatedSubtitle({
         requestId: intercept.requestId,
         vttContent: blankNativeSubtitleBody(intercept.originalBody),
       });
     }
-
-    if (response.sessionId !== undefined) {
-      state.activeSubtitleSessionId = response.sessionId;
-    }
-    updateTranslatedCues(response.cues);
+    updateTranslatedCues(response.cues ?? []);
     hideSubtitleToast();
     showSubtitleToast('Subtitles processing...');
     return true;
@@ -1304,6 +1367,81 @@ async function activateOverlayWithParsedCues(options: {
     showSubtitleToast('Subtitle translation error.');
     return false;
   }
+}
+
+/** One-line explanation for a downgraded Plus request. */
+function downgradeNotice(reason: string): string {
+  switch (reason) {
+    case 'empty-prep':
+      return 'No terms found to freeze — using standard mode.';
+    case 'prep-failed':
+      return 'Could not prepare the term list — using standard mode.';
+    default:
+      return 'Full-track mode is not available here — using standard mode.';
+  }
+}
+
+/** Drive the Plus progress chrome, watchdog, and commit path. */
+function startPlusRunUi(args: {
+  sessionId: number;
+  totalChunks: number;
+  intercept?: { requestId: string; originalBody: string };
+  stillOwnsSession: () => boolean;
+  /** Run at commit, before the intercept blank and the overlay publish. */
+  revealNativeCaptions: () => void;
+}): void {
+  const commitCues = (translated: SubtitleCue[], partial: boolean) => {
+    if (!args.stillOwnsSession()) return;
+    args.revealNativeCaptions();
+    if (args.intercept) {
+      sendTranslatedSubtitle({
+        requestId: args.intercept.requestId,
+        vttContent: blankNativeSubtitleBody(args.intercept.originalBody),
+      });
+    }
+    updateTranslatedCues(translated);
+    hideMiniProgress();
+    hideSubtitleToast();
+    showSubtitleToast(partial ? 'Subtitles ready — some lines were not translated.' : 'Subtitles ready.');
+  };
+
+  const run = new SubtitlePlusRun({
+    cancel: cancelBackgroundSubtitleSession,
+    progress: (completed, total) => {
+      updateMiniProgress({
+        translated: completed,
+        total,
+        status: 'translating',
+        label:
+          completed === 0
+            ? 'Preparing full translation…'
+            : `Preparing full translation… ${completed}/${total}`,
+        onStop: () => run.stop(),
+      });
+    },
+    commit: commitCues,
+    fail: (reason) => {
+      hideMiniProgress();
+      hideSubtitleToast();
+      if (reason === 'cancelled') return;
+      showSubtitleToast(
+        reason === 'timeout'
+          ? 'Full-track preparation timed out — showing original captions.'
+          : 'Full-track translation failed — showing original captions.',
+      );
+    },
+  });
+
+  run.start(args.sessionId, args.totalChunks);
+  activePlusRun = run;
+
+  const watchdog = window.setInterval(() => {
+    if (run.state !== 'running') {
+      window.clearInterval(watchdog);
+      return;
+    }
+    run.failByStall();
+  }, 5_000);
 }
 
 /**
@@ -3324,6 +3462,16 @@ export function startCoordinator(): () => void {
     _sendResponse: (response?: unknown) => void
   ) => {
     const msg = message as { action?: string; cues?: SubtitleCue[]; chunkStart?: number; chunkCues?: SubtitleCue[]; language?: string };
+    if (msg.action === 'SUBTITLE_PLUS_PROGRESS') {
+      activePlusRun?.handleProgress(message as SubtitlePlusProgressMessage);
+      return;
+    }
+    if (msg.action === 'SUBTITLE_PLUS_COMPLETE') {
+      const complete = message as SubtitlePlusCompleteMessage;
+      activePlusRun?.handleComplete(complete);
+      if (activePlusRun?.state === 'settled') activePlusRun = null;
+      return;
+    }
     if (msg.action === 'SUBTITLE_CHUNK_TRANSLATED') {
       // Drop stale chunks from cancelled/old subtitle sessions.
       // After seek/SPA reset, activeSubtitleSessionId is null — any chunk still
@@ -3492,6 +3640,8 @@ export function resetCoordinatorState(): void {
   // SPA navigation must not keep the previous page's auto category.
   _resetCategoryState();
   state.subtitleKnobOverride = undefined;
+  state.subtitleModeOverride = undefined;
+  activePlusRun = null;
   state.activeSubtitleSessionId = null;
   resetActiveSource();
   state.activeTrackIdentity = null;
@@ -4421,4 +4571,19 @@ export function applySubtitleKnobOverride(
 /** Read current per-tab knob overrides. */
 export function getSubtitleKnobOverride(): Partial<ProfileKnobs> {
   return state.subtitleKnobOverride ?? {};
+}
+
+/** Apply a per-session translation-mode override (mini studio). */
+export function applySubtitleModeOverride(mode: SubtitleTranslationMode | null | undefined): void {
+  state.subtitleModeOverride = mode ?? undefined;
+}
+
+/** Read the current per-session mode override. */
+export function getSubtitleModeOverride(): SubtitleTranslationMode | undefined {
+  return state.subtitleModeOverride;
+}
+
+/** Effective mode for this tab: override > settings > progressive. */
+function currentTranslationMode(settings: SubtitleSettings): SubtitleTranslationMode {
+  return resolveSubtitleTranslationMode(settings.translationMode, state.subtitleModeOverride);
 }
