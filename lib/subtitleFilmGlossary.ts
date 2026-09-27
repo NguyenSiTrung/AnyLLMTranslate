@@ -10,6 +10,8 @@
  */
 
 import type { SubtitleCue } from '@/types/subtitle';
+import type { ProfileKnobs } from '@/lib/subtitleProfiles';
+import { hashKnobs } from '@/lib/subtitleCacheKey';
 
 /** Strip a leading "[Speaker] " voice prefix if present (display concern, not
  *  content identity). Mirrors the prefixing added in background.ts translateChunk. */
@@ -40,4 +42,18 @@ export async function contentHash(cues: SubtitleCue[]): Promise<string> {
   return [...new Uint8Array(digest)]
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/**
+ * Storage key for a film glossary scoped to everything the pre-scan output
+ * depends on: the corpus hash, the target language, and the resolved knobs.
+ * Deliberately NOT the unscoped `contentHash` the progressive path uses —
+ * a glossary extracted for one target language must never seed another.
+ */
+export function scopedFilmGlossaryKey(
+  contentHash: string,
+  targetLanguage: string,
+  knobs: ProfileKnobs,
+): string {
+  return `${contentHash}:${targetLanguage}:${hashKnobs(knobs)}`;
 }

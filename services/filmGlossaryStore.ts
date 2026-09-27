@@ -14,6 +14,10 @@
 
 export const FILM_GLOSSARY_STORAGE_KEY = 'anyllm-film-glossary';
 
+/** Plus-mode namespace. Separate from the progressive namespace so neither mode
+ *  can read or overwrite the other's entries. */
+export const SCOPED_FILM_GLOSSARY_STORAGE_KEY = 'anyllm-film-glossary-scoped';
+
 /** Shape persisted: { [contentHash]: { sourceName: targetName, ... } }. */
 type FilmGlossaryMap = Record<string, Record<string, string>>;
 
@@ -43,5 +47,34 @@ export async function saveFilmGlossary(
     await chrome.storage.local.set({ [FILM_GLOSSARY_STORAGE_KEY]: all });
   } catch {
     // Degrade silently: no persistence this session. Caller proceeds in-memory.
+  }
+}
+
+/** Load a Plus-mode film glossary by its scoped key.
+ *  Returns undefined on miss OR on any storage error (never throws). */
+export async function loadScopedFilmGlossary(
+  key: string,
+): Promise<Record<string, string> | undefined> {
+  try {
+    const result = await chrome.storage.local.get(SCOPED_FILM_GLOSSARY_STORAGE_KEY);
+    const all = result[SCOPED_FILM_GLOSSARY_STORAGE_KEY] as FilmGlossaryMap | undefined;
+    return all?.[key];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Persist a Plus-mode film glossary by its scoped key. Overwrites. Never throws. */
+export async function saveScopedFilmGlossary(
+  key: string,
+  glossary: Record<string, string>,
+): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(SCOPED_FILM_GLOSSARY_STORAGE_KEY);
+    const all = (result[SCOPED_FILM_GLOSSARY_STORAGE_KEY] as FilmGlossaryMap | undefined) ?? {};
+    all[key] = glossary;
+    await chrome.storage.local.set({ [SCOPED_FILM_GLOSSARY_STORAGE_KEY]: all });
+  } catch {
+    // Degrade silently: no persistence this session.
   }
 }
