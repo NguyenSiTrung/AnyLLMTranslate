@@ -94,6 +94,7 @@ export interface MiniStudioView {
   opacityValue: HTMLElement;
   knobSelects: HTMLSelectElement[];
   glossary: HTMLSelectElement;
+  modeSelect: HTMLSelectElement;
   statusPill: HTMLElement;
   statusLabel: HTMLElement;
   preview: PreviewElements;
@@ -153,6 +154,12 @@ export function buildMiniStudioView(): MiniStudioView {
         <label for="anyllm-ms-list">Glossary list</label>
       </div>
     </div>
+    <div class="section">
+      <h3 class="section-title">Translation mode</h3>
+      <div class="row">
+        <label for="anyllm-ms-mode">Mode</label>
+      </div>
+    </div>
     <button type="button" class="footer-btn" data-action="open-options">Open Subtitle Studio ↗</button>
   `;
 
@@ -206,6 +213,12 @@ export function buildMiniStudioView(): MiniStudioView {
   const glossary = buildSelect({ id: 'anyllm-ms-list', action: 'glossary' });
   rows[5]?.appendChild(glossary.root);
 
+  // Row 6 is the Translation-mode row (the section was appended after Glossary,
+  // so the existing 0-5 indices are unchanged).
+  const modeSelect = buildSelect({ id: 'anyllm-ms-mode', action: 'mode' });
+  rows[6]?.appendChild(modeSelect.root);
+  fillSelect(modeSelect.select, ['progressive', 'plus'], 'progressive');
+
   const knobSelects: HTMLSelectElement[] = [];
   const knobsRoot = panel.querySelector('[data-role="knobs"]') as HTMLElement;
   for (const { knob, opts } of KNOB_OPTIONS) {
@@ -234,6 +247,7 @@ export function buildMiniStudioView(): MiniStudioView {
     opacityValue: panel.querySelector('[data-role="opacityValue"]') as HTMLElement,
     knobSelects,
     glossary: glossary.select,
+    modeSelect: modeSelect.select,
     statusPill: panel.querySelector('[data-role="status"]') as HTMLElement,
     statusLabel: panel.querySelector('[data-role="statusLabel"]') as HTMLElement,
     preview: {

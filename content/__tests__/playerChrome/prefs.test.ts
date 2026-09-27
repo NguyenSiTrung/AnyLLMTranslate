@@ -30,6 +30,8 @@ vi.mock('@/content/subtitleCoordinator', () => ({
   isInOverlayMode: () => isInOverlayMode(),
   applySubtitleKnobOverride: (knobs: unknown) => applySubtitleKnobOverride(knobs),
   getSubtitleKnobOverride: () => getSubtitleKnobOverride(),
+  isPlusSourceAvailable: () => false,
+  getActiveTrackCueCount: () => 0,
 }));
 
 vi.mock('@/inject/subtitleHandlers/registry', () => ({

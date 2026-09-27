@@ -13,6 +13,7 @@ import {
   loadMiniStudioSnapshot,
   setActiveGlossaryList,
   setAppearance,
+  setPlusHintDismissed,
   setStylePreset,
   setSubtitlesEnabled,
   setTabKnob,
@@ -26,6 +27,9 @@ import {
 } from './miniStudioView';
 import { resolveSubtitleStyle, type ResolvedSubtitleStyle } from '@/lib/subtitleStylePresets';
 import type { SubtitleStylePresetId } from '@/types/config';
+import { applySubtitleModeOverride, getSubtitleModeOverride } from '@/content/subtitleCoordinator';
+import { shouldOfferPlusHint } from '@/lib/subtitlePlusEligibility';
+import { showSubtitleToast } from '@/content/subtitleToast';
 
 export interface MiniStudioControllers {
   open(): Promise<void>;
@@ -41,6 +45,10 @@ const CLOSE_HIDE_MS = 170;
 
 /** Preview style used before the first snapshot applies. */
 const DEFAULT_PREVIEW_STYLE: ResolvedSubtitleStyle = resolveSubtitleStyle('classic', undefined, 0.7);
+
+/** One-time Plus hint is offered at most once per page load (it is also
+ *  persisted as dismissed, so it never reappears across pages/installs). */
+let plusHintShownThisPage = false;
 
 function openFullSubtitleStudio(): void {
   let url: string;
@@ -143,6 +151,21 @@ export function attachMiniStudio(args: {
       view.glossary.appendChild(opt);
     }
     view.glossary.value = snap.activeListId ?? '';
+    view.modeSelect.value = getSubtitleModeOverride() ?? snap.mode ?? 'progressive';
+    view.modeSelect.disabled = !snap.plusAvailable;
+    view.modeSelect.title = snap.plusAvailable
+      ? ''
+      : 'This player streams captions progressively';
+    if (!plusHintShownThisPage && shouldOfferPlusHint(snap.cueCount, snap.plusHintDismissed)) {
+      plusHintShownThisPage = true;
+      showSubtitleToast(
+        'This video can use full-track quality mode — open the player panel to switch.',
+        false,
+      );
+      // Persist immediately: the hint is one-time per install, so the toast's
+      // existing close button is the dismissal action and it never reappears.
+      void setPlusHintDismissed();
+    }
     setStatusPill(view.statusPill, view.statusLabel, snap.status);
     updatePreview(view.preview, {
       fontSize: snap.fontSize,
@@ -262,6 +285,9 @@ export function attachMiniStudio(args: {
   view.glossary.addEventListener('change', () => {
     const id = view.glossary.value || null;
     void setActiveGlossaryList(id).then(() => refresh());
+  });
+  view.modeSelect.addEventListener('change', () => {
+    applySubtitleModeOverride(view.modeSelect.value === 'plus' ? 'plus' : 'progressive');
   });
   view.optionsBtn.addEventListener('click', (e) => {
     e.preventDefault();

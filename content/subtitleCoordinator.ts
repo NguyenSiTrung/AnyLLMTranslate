@@ -90,7 +90,7 @@ import type {
   SubtitlePlusCompleteMessage,
   SubtitlePlusProgressMessage,
 } from '@/types/messages';
-import { resolveSubtitleTranslationMode } from '@/lib/subtitlePlusEligibility';
+import { resolveSubtitleTranslationMode, PLUS_MIN_CUES } from '@/lib/subtitlePlusEligibility';
 import { SubtitlePlusRun } from '@/content/subtitlePlusRun';
 
 /** Resolve the subtitle profile for the current page from its hostname.
@@ -4613,6 +4613,19 @@ export function applySubtitleModeOverride(mode: SubtitleTranslationMode | null |
 /** Read the current per-session mode override. */
 export function getSubtitleModeOverride(): SubtitleTranslationMode | undefined {
   return state.subtitleModeOverride;
+}
+
+/** True when the active source can run Plus: a complete parsed cue array from
+ *  the full-file activation path, not an incremental tier. Advisory only — the
+ *  background re-validates eligibility. */
+export function isPlusSourceAvailable(): boolean {
+  if (state.interceptOriginalCues.length < PLUS_MIN_CUES) return false;
+  return state.activeSource !== 'dom' && state.activeSource !== 'mse' && state.activeSource !== 'manifest';
+}
+
+/** Cue count of the active complete track (0 when none). */
+export function getActiveTrackCueCount(): number {
+  return state.interceptOriginalCues.length;
 }
 
 /** Effective mode for this tab: override > settings > progressive. */

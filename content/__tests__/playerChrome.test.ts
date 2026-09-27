@@ -216,7 +216,7 @@ describe('mini studio view', () => {
     expect(v.knobSelects[0].options[1].textContent).toBe('Literal');
 
     const titles = [...v.panel.querySelectorAll('.section-title')].map((el) => el.textContent);
-    expect(titles).toEqual(['Appearance', 'Translation style', 'Glossary']);
+    expect(titles).toEqual(['Appearance', 'Translation style', 'Glossary', 'Translation mode']);
     {
     const v = buildMiniStudioView();
     setStatusPill(v.statusPill, v.statusLabel, 'translating');
@@ -257,6 +257,15 @@ describe('mini studio view', () => {
     fillSelect(v.glossary, ['auto', 'literal'], 'missing');
     expect(v.glossary.value).toBe('auto');
     }
+  });
+
+  it('exposes a translation-mode select with Progressive and Plus options', () => {
+    const view = buildMiniStudioView();
+    expect(view.modeSelect).toBeInstanceOf(HTMLSelectElement);
+    expect(view.modeSelect.dataset.action).toBe('mode');
+    const values = [...view.modeSelect.options].map((o) => o.value);
+    expect(values).toEqual(['progressive', 'plus']);
+    expect(view.modeSelect.value).toBe('progressive');
   });
 });
 

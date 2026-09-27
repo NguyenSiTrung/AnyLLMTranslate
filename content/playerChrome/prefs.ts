@@ -8,6 +8,8 @@ import {
   applySubtitleKnobOverride,
   getSubtitleKnobOverride,
   isInOverlayMode,
+  isPlusSourceAvailable,
+  getActiveTrackCueCount,
 } from '@/content/subtitleCoordinator';
 import { detectCurrentHandler } from '@/inject/subtitleHandlers/registry';
 import {
@@ -22,6 +24,7 @@ import type {
   SubtitleDisplayMode,
   SubtitleStyleOverrides,
   SubtitleStylePresetId,
+  SubtitleTranslationMode,
 } from '@/types/config';
 import type { ChromeStatus } from './types';
 import { isContextInvalidated } from '@/lib/utils';
@@ -38,6 +41,14 @@ export interface MiniStudioSnapshot {
   knobs: Partial<ProfileKnobs>;
   lists: NamedGlossaryList[];
   activeListId: string | null;
+  /** Settings-level translation mode (the per-session override is read live). */
+  mode: SubtitleTranslationMode;
+  /** True when the active source provides a complete track. */
+  plusAvailable: boolean;
+  /** Cue count of the active complete track (0 when none). */
+  cueCount: number;
+  /** Persisted dismissal of the one-time Plus hint. */
+  plusHintDismissed: boolean;
   hostname: string;
   status: ChromeStatus;
 }
@@ -68,6 +79,10 @@ export async function loadMiniStudioSnapshot(): Promise<MiniStudioSnapshot> {
       knobs: {},
       lists: [],
       activeListId: null,
+      mode: 'progressive',
+      plusAvailable: false,
+      cueCount: 0,
+      plusHintDismissed: true,
       hostname,
       status: 'disabled',
     };
@@ -93,6 +108,10 @@ export async function loadMiniStudioSnapshot(): Promise<MiniStudioSnapshot> {
     knobs,
     lists: settings.namedGlossaryLists ?? [],
     activeListId,
+    mode: ss.translationMode ?? 'progressive',
+    plusAvailable: isPlusSourceAvailable(),
+    cueCount: getActiveTrackCueCount(),
+    plusHintDismissed: ss.plusHintDismissed === true,
     hostname,
     status: getChromeStatus({
       enabled: ss.enabled,
@@ -189,4 +208,14 @@ export async function setActiveGlossaryList(listId: string | null): Promise<void
     listId,
   );
   await updateSettings({ subtitleListBySite });
+}
+
+/** Persist the one-time Plus hint dismissal. updateSettings deep-merges, so
+ *  other subtitle settings are preserved. */
+export async function setPlusHintDismissed(): Promise<void> {
+  if (isContextInvalidated()) return;
+  const settings = await loadSettings();
+  await updateSettings({
+    subtitleSettings: { ...settings.subtitleSettings, plusHintDismissed: true },
+  });
 }
