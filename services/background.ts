@@ -172,7 +172,7 @@ import {
   type PlusGlossarySnapshot,
 } from '@/lib/subtitleCacheKey';
 import { withRetry, isRetryableTranslationError } from '@/lib/subtitleRetry';
-import { mergeProperNouns, formatRollingGlossary } from '@/lib/subtitleGlossary';
+import { mergeProperNouns, formatRollingGlossary, formatFrozenGlossary } from '@/lib/subtitleGlossary';
 import {
   filterUnlockedProperNouns,
   formatNamedListGlossary,
@@ -183,8 +183,17 @@ import {
   resolveActiveSubtitleListId,
 } from '@/lib/namedGlossaryLists';
 import { mergeSuggestionMaps } from '@/lib/namedGlossarySuggestions';
-import { contentHash } from '@/lib/subtitleFilmGlossary';
-import { loadFilmGlossary, saveFilmGlossary } from '@/services/filmGlossaryStore';
+import { contentHash, scopedFilmGlossaryKey } from '@/lib/subtitleFilmGlossary';
+import {
+  loadFilmGlossary,
+  saveFilmGlossary,
+  loadScopedFilmGlossary,
+  saveScopedFilmGlossary,
+} from '@/services/filmGlossaryStore';
+import {
+  resolvePlusEligibility,
+  type PlusDowngradeReason,
+} from '@/lib/subtitlePlusEligibility';
 import { preScanNames } from '@/services/subtitleNameScanner';
 import {
   getAsrRealignEntry,
@@ -257,6 +266,18 @@ interface ChunkTranslateOptions {
   frozen?: Record<string, string>;
   /** Plus only: pre-formatted frozen block for the prompt. */
   frozenBlock?: string;
+}
+
+/** Response for a subtitle translation request. `mode`/`downgradeReason` are
+ *  present only for Plus requests; `totalChunks` only on the Plus ack. */
+interface TranslateSubtitleResponse {
+  success: boolean;
+  cues?: SubtitleCue[];
+  error?: string;
+  sessionId?: number;
+  mode?: 'progressive' | 'plus';
+  downgradeReason?: PlusDowngradeReason;
+  totalChunks?: number;
 }
 
 /**
@@ -1294,7 +1315,7 @@ function normalizeTranslatedSubtitleText(text: string): string {
 async function handleTranslateSubtitle(
   message: TranslateSubtitleMessage,
   sender?: chrome.runtime.MessageSender,
-): Promise<{ success: boolean; cues?: SubtitleCue[]; error?: string; sessionId?: number }> {
+): Promise<TranslateSubtitleResponse> {
   const sessionId = message.sessionId ?? ++subtitleSessionCounter;
   // P1 semaphore bypass fix: previously a single acquire/release wrapped the
   // whole function, but the async chunk loop runs AFTER this function returns —
@@ -1322,6 +1343,13 @@ async function handleTranslateSubtitle(
     );
     const lockedSources = lockedSourceSet(activeList);
 
+    // Plus mode: resolve eligibility and prepare the frozen terminology set
+    // BEFORE responding. The response is either the Plus ack or a progressive
+    // downgrade — never a post-ack mode change.
+    const wantsPlus = message.translationMode === 'plus';
+    let downgradeReason: PlusDowngradeReason | undefined;
+    let plusRun: { frozen: Record<string, string>; block: string } | undefined;
+
     // Resolve translation knobs from the content-script-provided profile.
     // Unknown/absent profile falls back to 'media' (balanced defaults); an
     // unexpected profile string falls back inside resolveEffectiveKnobs too
@@ -1336,11 +1364,46 @@ async function handleTranslateSubtitle(
       message.knobOverrides,
     );
 
+    if (wantsPlus) {
+      const eligible = resolvePlusEligibility({
+        translationMode: message.translationMode,
+        completeTrack: message.completeTrack,
+        skipFilmPreScan: message.skipFilmPreScan,
+        cueCount: cues.length,
+      });
+      if (!eligible) {
+        downgradeReason = 'ineligible';
+      } else {
+        try {
+          const scopedKey = scopedFilmGlossaryKey(
+            await contentHash(cues),
+            targetLanguage,
+            subtitleKnobs,
+          );
+          let scoped = await loadScopedFilmGlossary(scopedKey);
+          if (!scoped) {
+            scoped = await preScanNames(service, sourceLanguage, targetLanguage, cues, subtitleKnobs);
+            if (scoped && Object.keys(scoped).length > 0) {
+              await saveScopedFilmGlossary(scopedKey, scoped);
+            }
+          }
+          const frozen = filterUnlockedProperNouns(scoped ?? {}, lockedSources);
+          if (Object.keys(frozen).length === 0) {
+            downgradeReason = 'empty-prep';
+          } else {
+            plusRun = { frozen, block: formatFrozenGlossary(frozen) };
+          }
+        } catch {
+          downgradeReason = 'prep-failed';
+        }
+      }
+    }
+
     // Per-film proper-noun glossary: load by content hash, or pre-scan once and
     // persist. Seeds the rolling glossary so chunk 0 translates with the full
     // name list. Every failure degrades to an empty seed — translation proceeds.
     let filmGlossary: Record<string, string> | undefined;
-    if (!message.skipFilmPreScan) {
+    if (!plusRun && !message.skipFilmPreScan) {
       const filmHash = await contentHash(cues);
       try {
         filmGlossary = await loadFilmGlossary(filmHash);
@@ -1626,6 +1689,20 @@ async function handleTranslateSubtitle(
       }
     };
 
+    if (plusRun) {
+      const totalChunks = Math.ceil(cues.length / CHUNK_SIZE);
+      if (tabId !== undefined) {
+        await writeNamedGlossarySuggestions(tabId, plusRun.frozen);
+      }
+      return {
+        success: true,
+        mode: 'plus',
+        sessionId,
+        totalChunks,
+        cues: [],
+      };
+    }
+
     // Process first chunk synchronously to return immediately
     const firstChunkCues = cues.slice(0, CHUNK_SIZE);
     try {
@@ -1670,7 +1747,12 @@ async function handleTranslateSubtitle(
       // arrived while it was in flight bumped the generation — surrender the
       // queue instead of spending the calls.
       if (sessionGenerationFor(tabId) !== requestGeneration) {
-        return { success: true, cues: translatedCues, sessionId };
+        return {
+          success: true,
+          cues: translatedCues,
+          sessionId,
+          ...(downgradeReason ? { mode: 'progressive' as const, downgradeReason } : {}),
+        };
       }
 
       activeSessions.set(tabId, session);
@@ -1735,7 +1817,12 @@ async function handleTranslateSubtitle(
     // Background chunks also record per successful translateChunk (avoids
     // overcounting cues that fail in later chunks).
 
-    return { success: true, cues: translatedCues, sessionId };
+    return {
+      success: true,
+      cues: translatedCues,
+      sessionId,
+      ...(downgradeReason ? { mode: 'progressive' as const, downgradeReason } : {}),
+    };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Subtitle translation failed';
     return { success: false, error: errorMsg };
