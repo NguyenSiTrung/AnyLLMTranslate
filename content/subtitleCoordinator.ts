@@ -569,6 +569,20 @@ const state: CoordinatorState = {
 /** Active Plus run controller, if any. Routes the two push messages. */
 let activePlusRun: SubtitlePlusRun | null = null;
 
+/**
+ * Clears the active Plus stall watchdog interval. Held in module state so
+ * teardown can stop the interval outright: the run's own self-clear only fires
+ * when a push message settles it, which cannot happen once the handle is gone.
+ */
+let activePlusWatchdogCleanup: (() => void) | null = null;
+
+/** Stop the active Plus watchdog interval (idempotent). */
+function clearPlusWatchdog(): void {
+  const cleanup = activePlusWatchdogCleanup;
+  activePlusWatchdogCleanup = null;
+  cleanup?.();
+}
+
 /** Current video time for translation ordering (seek anchor wins over live time). */
 function getPlaybackTimeForTranslation(): number {
   if (state.playbackAnchorTime !== null) {
@@ -1276,6 +1290,14 @@ async function activateOverlayWithParsedCues(options: {
   const stillOwnsSession = () => state.activeSubtitleSessionId === sessionId;
 
   const mode = currentTranslationMode(settings.subtitleSettings);
+  // Hides the site's own captions. In Plus this runs at the terminal commit (or
+  // on a downgrade); progressive runs it upfront above. `handler` is captured
+  // here because startPlusRunUi and the downgrade branch both need it.
+  const revealNativeCaptions = () => {
+    const domSource = handler?.getDomCueSource?.();
+    if (domSource) hideNativeCaptions(domSource.captionWindowSelector, 'display');
+    else applyNativeCaptionHideForHandler(handler);
+  };
   showSubtitleToast(
     mode === 'plus'
       ? 'Preparing full translation…'
@@ -1333,17 +1355,16 @@ async function activateOverlayWithParsedCues(options: {
         totalChunks: response.totalChunks,
         intercept,
         stillOwnsSession,
-        revealNativeCaptions: () => {
-          const domSource = handler?.getDomCueSource?.();
-          if (domSource) hideNativeCaptions(domSource.captionWindowSelector, 'display');
-          else applyNativeCaptionHideForHandler(handler);
-        },
+        revealNativeCaptions,
       });
       return true;
     }
 
     if (response.downgradeReason) {
       showSubtitleToast(downgradeNotice(response.downgradeReason));
+      // A downgrade is progressive delivery: hide the site's captions before
+      // publishing the overlay, exactly as the progressive path does upfront.
+      revealNativeCaptions();
     }
 
     if (intercept) {
@@ -1435,13 +1456,18 @@ function startPlusRunUi(args: {
   run.start(args.sessionId, args.totalChunks);
   activePlusRun = run;
 
+  // Replace any prior run's watchdog so it cannot fire against this session.
+  clearPlusWatchdog();
   const watchdog = window.setInterval(() => {
     if (run.state !== 'running') {
-      window.clearInterval(watchdog);
+      clearPlusWatchdog();
       return;
     }
     run.failByStall();
   }, 5_000);
+  activePlusWatchdogCleanup = () => {
+    window.clearInterval(watchdog);
+  };
 }
 
 /**
@@ -3585,6 +3611,11 @@ export function startCoordinator(): () => void {
       styleApplyTimer = null;
     }
 
+    // Stop the Plus stall watchdog and drop the run handle: no push message can
+    // settle the run after teardown, so the interval must not be left running.
+    clearPlusWatchdog();
+    activePlusRun = null;
+
     // Cleanup drag listeners and overlay if active
     if (state.dragCleanup) {
       state.dragCleanup();
@@ -3641,6 +3672,7 @@ export function resetCoordinatorState(): void {
   _resetCategoryState();
   state.subtitleKnobOverride = undefined;
   state.subtitleModeOverride = undefined;
+  clearPlusWatchdog();
   activePlusRun = null;
   state.activeSubtitleSessionId = null;
   resetActiveSource();
