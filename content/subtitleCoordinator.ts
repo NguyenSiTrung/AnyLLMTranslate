@@ -1361,7 +1361,6 @@ async function activateOverlayWithParsedCues(options: {
     }
 
     if (response.downgradeReason) {
-      showSubtitleToast(downgradeNotice(response.downgradeReason));
       // A downgrade is progressive delivery: hide the site's captions before
       // publishing the overlay, exactly as the progressive path does upfront.
       revealNativeCaptions();
@@ -1375,7 +1374,9 @@ async function activateOverlayWithParsedCues(options: {
     }
     updateTranslatedCues(response.cues ?? []);
     hideSubtitleToast();
-    showSubtitleToast('Subtitles processing...');
+    showSubtitleToast(
+      response.downgradeReason ? downgradeNotice(response.downgradeReason) : 'Subtitles processing...',
+    );
     return true;
   } catch (error) {
     if (isStaleActivation() || !stillOwnsSession()) return unblockStaleIntercept();
@@ -2365,6 +2366,14 @@ function handleVideoSeeked(event?: Event): void {
     cancelBackgroundSubtitleSession();
     state.activeSubtitleSessionId = null;
 
+    // Settle any active Plus run so its watchdog cannot fire a stale timeout
+    // and its mini-progress chrome does not linger across the seek.
+    if (activePlusRun) {
+      clearPlusWatchdog();
+      activePlusRun = null;
+      hideMiniProgress();
+    }
+
     // Clear the overlay so stale cues from the old position don't show during
     // the brief window before the new position's segment arrives.
     updateActiveRendererCues([]);
@@ -2431,6 +2440,13 @@ function resetCueBuffersForTrackSwitch(): void {
 async function handleDomTrackChanged(_payload: SubtitleDomTrackChangedPayload): Promise<void> {
   console.log('AnyLLMTranslate: DOM subtitle track changed — clearing cue buffers, keeping translation caches');
   cancelBackgroundSubtitleSession();
+  // Settle any active Plus run so its watchdog cannot fire a stale timeout
+  // and its mini-progress chrome does not linger across the track switch.
+  if (activePlusRun) {
+    clearPlusWatchdog();
+    activePlusRun = null;
+    hideMiniProgress();
+  }
   // Track-switch fires regardless of which tier is currently active (Max's
   // aria-checked observer doesn't know about our tier precedence), so clear
   // both DOM and manifest cue buffers — otherwise cues from the OLD track's
