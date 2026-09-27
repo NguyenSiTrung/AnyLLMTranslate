@@ -23,6 +23,18 @@ export interface GlossarySnapshot {
   namedListEntries?: Array<{ source: string; target: string }>;
 }
 
+/**
+ * Plus-mode glossary snapshot. Unlike the progressive snapshot, proper nouns
+ * are hashed as source→target PAIRS, because the frozen target is what Plus
+ * guarantees; a changed mapping must invalidate.
+ */
+export interface PlusGlossarySnapshot {
+  globalEntries: Array<{ source: string; target: string }>;
+  namedListId?: string | null;
+  namedListEntries?: Array<{ source: string; target: string }>;
+  frozenPairs: Array<{ source: string; target: string }>;
+}
+
 const encoder = new TextEncoder();
 
 /** Hex SHA-256 of an arbitrary string. */
@@ -62,6 +74,21 @@ export function hashGlossary(snapshot: GlossarySnapshot): string {
   return fnv1aHex(`${globalSorted}|${nounsSorted}|${namedId}|${namedSorted}`);
 }
 
+/** Stable hex hash of a Plus glossary snapshot. Pairs are sorted by source then
+ *  target so entry order does not affect the key. */
+export function hashPlusGlossary(snapshot: PlusGlossarySnapshot): string {
+  const pairs = (entries: Array<{ source: string; target: string }>) =>
+    [...entries]
+      .sort((a, b) =>
+        a.source < b.source ? -1 : a.source > b.source ? 1 : a.target < b.target ? -1 : a.target > b.target ? 1 : 0,
+      )
+      .map((e) => `${e.source}=>${e.target}`)
+      .join(';');
+  return fnv1aHex(
+    `${pairs(snapshot.globalEntries)}|${pairs(snapshot.frozenPairs)}|${snapshot.namedListId ?? ''}|${pairs(snapshot.namedListEntries ?? [])}`,
+  );
+}
+
 /**
  * Full subtitle cache key: SHA-256('subtitle:' + src + ':' + tgt + ':' + text
  * + ':' + knobsHash + ':' + glossaryHash). The 'subtitle:' namespace prefix
@@ -77,6 +104,25 @@ export async function generateSubtitleCacheKey(
   const knobsHash = hashKnobs(knobs);
   const glossaryHash = hashGlossary(glossarySnapshot);
   const input = `subtitle:${sourceLanguage}:${targetLanguage}:${text}:${knobsHash}:${glossaryHash}`;
+  return sha256Hex(input);
+}
+
+/**
+ * Full Plus cache key: SHA-256('subtitle-plus:' + src + ':' + tgt + ':' + text
+ * + ':' + knobsHash + ':' + glossaryHash). The `subtitle-plus:` namespace
+ * guarantees Plus and progressive entries never collide, so the progressive
+ * keys stay byte-identical to before.
+ */
+export async function generateSubtitlePlusCacheKey(
+  text: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+  knobs: ProfileKnobs,
+  glossarySnapshot: PlusGlossarySnapshot,
+): Promise<string> {
+  const knobsHash = hashKnobs(knobs);
+  const glossaryHash = hashPlusGlossary(glossarySnapshot);
+  const input = `subtitle-plus:${sourceLanguage}:${targetLanguage}:${text}:${knobsHash}:${glossaryHash}`;
   return sha256Hex(input);
 }
 
