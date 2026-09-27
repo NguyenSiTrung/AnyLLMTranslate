@@ -173,6 +173,26 @@ export function CaptionQualityCard({ settings, disabled, onUpdate }: SubtitleCar
               </div>
             </div>
           </div>
+
+          <div className="flex items-start justify-between gap-3 pt-3 border-t border-zinc-800/60">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-zinc-200">Full-track quality mode</p>
+              <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                Freeze one term list for the whole track, translate it in parallel, and show
+                nothing until it is ready. More consistent names and terms; waits for the whole
+                track; uses extra AI calls. Only applies to players that provide the full track.
+              </p>
+            </div>
+            <Toggle
+              id="subtitle-plus-mode-enable"
+              ariaLabel="Full-track quality mode"
+              checked={settings.translationMode === 'plus'}
+              disabled={disabled}
+              onChange={(checked) => {
+                onUpdate({ translationMode: checked ? 'plus' : 'progressive' });
+              }}
+            />
+          </div>
         </div>
       </DisabledDimmer>
 
