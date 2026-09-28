@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-09-12 all (no methodology drift this window — ≥70% coverage target holds at 78.81% measured; the phase-verification live-check paragraph already points at audit §8 after the round-2 renumber; branching strategy and Conventional-Commits still match the repo; CI/CD unchanged at pages.yml + bridge-image.yml; 754 pass / 0 fail across 214 files; tsc 0 / lint 0 re-run; build 3.85 MB re-measured) -->
+<!-- conductor-refresh: 2026-09-28 all (no methodology drift — branching strategy and Conventional Commits still match the repo; ≥70 % coverage target holds at 80.26 % measured, up from 78.81 %; CI/CD unchanged at pages.yml + bridge-image.yml; 742 pass / 117 files (third full run green in 57.6 s; runs 1–2 had 2 then 1 load-sensitive failures, both green in isolation — the documented flake class, and the suite now runs under `pool: 'threads'` with a global timer hand-back); tsc 0; **lint gate is NOT green — 38 errors at HEAD**, so the phase-verification lint step records the count instead of asserting zero; build 3.92 MB) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy
@@ -40,6 +40,10 @@ At the end of each phase:
 **Platform-dependent work needs a live check.** Unit tests cannot close a finding whose trigger only exists on the real site (DRM/MSE capture, player DOM, CDN behaviour). Maintenance work that touches a platform pipeline must carry an explicit "live verification" backlog — see `docs/hbomax-subtitle-risk-audit.md` §8 for the Max example — and those items stay open until a real session confirms them. A green suite is not evidence that a capture-path fix works in production.
 
 When a full Vitest run times out, rerun the affected file(s) in isolation and perform one clean full-suite rerun before classifying it as a regression. Record repeated load-sensitive timeouts in the refresh health snapshot; do not report the full gate as green solely because isolated files pass.
+
+The suite runs under `pool: 'threads'` (switched 2026-09-22: a process fork per file cost 117 s and 5 load-sensitive failures on a 4-core host versus ~63 s all-green with threads) and `vitest.setup.ts` hands back timers in a global `afterEach`, added after a leaked fake timer in `background.test.ts` poisoned every later file's `beforeEach`. A run that comes in below the known-green count with a *moving* failure set is load, not regression — confirm by rerunning those files in isolation.
+
+**The lint gate is not currently green:** HEAD (2026-09-28) carries **38 ESLint errors** (32 in `content/__tests__/webTranslateLifecycle.test.ts` — `no-explicit-any` / `consistent-type-imports`; 4 `no-useless-escape` in `services/__tests__/background.plus.test.ts`; 1 `no-non-null-assertion` in `entrypoints/content.ts`; 1 `preserve-caught-error` in `services/providerPool.ts`) after the 2026-09-14…22 test consolidations merged files that carried them. Run `pnpm lint` and record the count; a non-zero exit is not by itself a new regression, and the count must not grow. Filed as `AnyLLMTranslate-e140` (2026-09-28 refresh).
 
 ## Code Review Checklist
 
