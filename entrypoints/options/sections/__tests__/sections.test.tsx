@@ -85,6 +85,18 @@ describe('SubtitlesSection (Subtitle Studio)', () => {
     expect(screen.getByRole('switch', { name: /Enable Subtitles/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Live preview', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Appearance', level: 3 })).toBeInTheDocument();
+    // Translation mode leads the controls rail — it picks the pipeline for the
+    // whole video, so it must not sit under the YouTube-only caption-quality card.
+    expect(
+      screen.getByRole('heading', { name: 'Translation mode', level: 3 }),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole('heading', { name: 'Translation mode', level: 3 })
+        .compareDocumentPosition(
+          screen.getByRole('heading', { name: 'Source track', level: 3 }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Source track', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Platforms', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Caption quality', level: 3 })).toBeInTheDocument();

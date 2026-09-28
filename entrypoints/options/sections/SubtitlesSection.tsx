@@ -13,6 +13,7 @@ import { SubtitlePreview } from '@/entrypoints/options/components/SubtitlePrevie
 import { getPreviewCuesForLanguage, resolveStyleChipLabel } from '@/lib/subtitlePreviewCues';
 import { AppearanceCard } from './subtitles/AppearanceCard';
 import { SourceTrackCard } from './subtitles/SourceTrackCard';
+import { TranslationModeCard } from './subtitles/TranslationModeCard';
 import { PlatformsCard } from './subtitles/PlatformsCard';
 import { CaptionQualityCard, SAVED_CAPTION_REALIGNS_SECTION_ID } from './subtitles/CaptionQualityCard';
 import { PrealignFromLinkCard } from './subtitles/PrealignFromLinkCard';
@@ -93,38 +94,45 @@ export function SubtitlesSection() {
         {/* Controls rail */}
         <div className="lg:col-span-3 order-2 min-h-0 lg:overflow-y-auto lg:overscroll-contain space-y-4 [scrollbar-gutter:stable]">
           <div className="animate-stagger" style={stagger(0)}>
-            <SourceTrackCard
+            <TranslationModeCard
               settings={subtitleSettings}
               disabled={isDisabled}
               onUpdate={handleUpdate}
             />
           </div>
           <div className="animate-stagger" style={stagger(1)}>
-            <PlatformsCard
+            <SourceTrackCard
               settings={subtitleSettings}
               disabled={isDisabled}
               onUpdate={handleUpdate}
             />
           </div>
           <div className="animate-stagger" style={stagger(2)}>
-            <CaptionQualityCard
+            <PlatformsCard
               settings={subtitleSettings}
               disabled={isDisabled}
               onUpdate={handleUpdate}
             />
           </div>
           <div className="animate-stagger" style={stagger(3)}>
+            <CaptionQualityCard
+              settings={subtitleSettings}
+              disabled={isDisabled}
+              onUpdate={handleUpdate}
+            />
+          </div>
+          <div className="animate-stagger" style={stagger(4)}>
             <PrealignFromLinkCard disabled={isDisabled} />
           </div>
           <div
             id={SAVED_CAPTION_REALIGNS_SECTION_ID}
             tabIndex={-1}
             className="animate-stagger outline-none"
-            style={stagger(4)}
+            style={stagger(5)}
           >
             <SavedCaptionRealignsCard disabled={isDisabled} />
           </div>
-          <div className="animate-stagger" style={stagger(5)}>
+          <div className="animate-stagger" style={stagger(6)}>
             <TranslationStyleCard
               settings={subtitleSettings}
               disabled={isDisabled}

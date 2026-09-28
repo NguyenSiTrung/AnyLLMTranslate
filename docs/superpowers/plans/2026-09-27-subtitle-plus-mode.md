@@ -2744,3 +2744,7 @@ Run: `pnpm build`, then load `.output/chrome-mv3` as an unpacked extension and v
 git add entrypoints/options/sections/subtitles/CaptionQualityCard.tsx entrypoints/options/sections/__tests__/captionQualityPlus.test.tsx lib/__tests__/subtitlePlusGuarantee.test.ts
 git commit -m "feat(subtitles): expose the Plus mode toggle and pin the progressive guarantee"
 ```
+## Notes after implementation
+
+1. **Task 12's toggle no longer lives in `CaptionQualityCard.tsx`.** The card is YouTube-badged and scoped to "Improve auto-generated YouTube captions", but Plus eligibility is source-agnostic (`completeTrack && cueCount >= PLUS_MIN_CUES`), so the row read as a YouTube-only ASR rule and grouped a translation-strategy switch with caption cleanup. `AnyLLMTranslate-j327` moved it to `entrypoints/options/sections/subtitles/TranslationModeCard.tsx`, rendered first in the controls rail above *Source track*; the YouTube-independent description is unchanged. `captionQualityPlus.test.tsx` became `__tests__/translationModeCard.test.tsx`, and `sections.test.tsx` asserts the card's place ahead of *Source track*.
+2. Everything else in Task 12 shipped as written — the guarantee suite and the nine-step smoke checklist are unaffected by the relocation (step 1 now reads the toggle from the *Translation mode* card).

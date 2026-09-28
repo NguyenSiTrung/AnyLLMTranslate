@@ -265,7 +265,7 @@ The component already accepts an explicit `label` override and already renders a
 
 ### K. UI surfaces
 
-- **Options → Subtitles (Subtitle Studio):** a toggle in the caption-quality card — "Full-track quality mode" with the honest description: *more consistent; waits for the whole track; uses extra AI calls*. Default off.
+- **Options → Subtitles (Subtitle Studio):** the **Translation mode** card, first in the controls rail — "Full-track quality mode" with the honest description: *more consistent; waits for the whole track; uses extra AI calls*. Default off. Shipped 2026-09-28 (`AnyLLMTranslate-j327`): the toggle first landed as the last row of the YouTube-badged *Caption quality* card, which read as a YouTube-only ASR rule and grouped the mode with caption cleanup instead of translation strategy; it now sits above *Source track* in its own card.
 - **In-player mini studio:** a mode select next to the existing glossary select, offering Progressive / Plus for this video. When the source is ineligible, the control renders disabled with the reason ("This player streams captions progressively"). The mini studio is plain DOM, so this replicates `DisabledDimmer`'s dimmed/disabled styling rather than reusing the React component.
 - **One-time hint:** when an eligible track longer than the threshold (~200 cues) is detected and `plusHintDismissed` is false, offer the mode once with a dismiss action. The decision is a pure helper (`shouldOfferPlusHint(cueCount, dismissed)`, same module as the eligibility predicate) so the threshold is testable without UI. Dismissal is persisted; the mini studio control remains the permanent path.
 
