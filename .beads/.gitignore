@@ -9,6 +9,8 @@ bd.sock.startlock
 sync-state.json
 last-touched
 .exclusive-lock
+# Fingerprint of issues.jsonl used by the auto-import hook to detect changes
+.auto-import-issues.jsonl
 
 # Daemon runtime (lock, log, pid)
 daemon.*
