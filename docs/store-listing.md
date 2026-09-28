@@ -145,9 +145,9 @@ translation can be displayed back to the user. This is the extension's entire fu
 The extension has no server of its own. No user data is transmitted to the developer, and no
 data is sold, shared, or used for advertising, profiling, or credit assessment. API
 credentials are supplied by the user, stored encrypted in their browser, and sent only to the
-endpoint the user chose. Local usage statistics, including page hostnames when per-site
-tracking is enabled, are stored on the user's device only and can be exported or erased by the
-user at any time.
+endpoint the user chose. Optional local usage statistics include page hostnames only when the
+user enables per-site tracking; those hostnames remain on-device and can be exported or erased
+at any time.
 
 A prominent in-product disclosure listing every data type and its destination is shown during
 first-run setup, and the user must accept it before any translation is sent.

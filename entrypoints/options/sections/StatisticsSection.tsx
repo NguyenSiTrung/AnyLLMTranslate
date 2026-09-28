@@ -697,7 +697,7 @@ function DataControls({
           onChange={onHostTrackingChange}
           disabled={isSaving}
           label="Host tracking"
-          description="Record site domains (e.g. youtube.com) in daily stats. Turning off stops new host writes; existing host data remains until pruned or reset."
+          description="Off by default. When enabled, record site domains (e.g. youtube.com) in daily stats. Turning off stops new host writes; existing host data remains until pruned or reset."
         />
 
         <div className="space-y-1.5">

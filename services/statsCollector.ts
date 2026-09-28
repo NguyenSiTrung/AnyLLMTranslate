@@ -299,7 +299,7 @@ function normalizeStatsV2(raw: Partial<TranslationStatsV2> & { version?: number 
       hostTrackingEnabled:
         typeof prefs?.hostTrackingEnabled === 'boolean'
           ? prefs.hostTrackingEnabled
-          : true,
+          : false,
       retentionDays,
     },
   };
@@ -388,7 +388,7 @@ export async function migrateStatsIfNeeded(raw: unknown): Promise<TranslationSta
     lifetime: mapV1Lifetime(v1),
     recentDailySummary: buildRecentDailySummary(dailyRecords),
     preferences: {
-      hostTrackingEnabled: true,
+      hostTrackingEnabled: false,
       retentionDays: 90,
     },
   };

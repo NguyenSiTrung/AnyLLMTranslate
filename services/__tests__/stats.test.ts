@@ -142,6 +142,7 @@ describe('statsIdb + stats migration', () => {
     const empty = await getStatsV2();
     expect(empty.version).toBe(2);
     expect(empty.lifetime.characters).toBe(0);
+    expect(empty.preferences.hostTrackingEnabled).toBe(false);
     expect(empty.preferences.retentionDays).toBe(90);
 
     // Clear defaults written by the empty path so migration sees raw v1.
@@ -164,10 +165,34 @@ describe('statsIdb + stats migration', () => {
     expect(stats.lifetime.apiCalls).toBe(3);
     expect(stats.lifetime.pageSessions).toBe(4);
     expect(stats.lifetime.subtitleCues).toBe(5);
+    expect(stats.preferences.hostTrackingEnabled).toBe(false);
     const migratedDay = await getDailyRecord('2026-07-01');
     expect(migratedDay?.totals.characters).toBe(50);
     expect(migratedDay?.totals.apiCalls).toBe(1);
     expect(migratedDay?.byHost).toEqual({});
+  });
+
+  it('defaults host tracking off but preserves an explicit stored preference', async () => {
+    await recordUsage({ mode: 'page', characters: 10, apiCalls: 1, host: 'example.com' });
+    const defaults = await getStatsV2();
+    const today = new Date().toLocaleDateString('en-CA');
+    expect(defaults.preferences.hostTrackingEnabled).toBe(false);
+    expect((await getDailyRecord(today))?.byHost).toEqual({});
+
+    chromeLocal[STATS_STORAGE_KEY] = {
+      ...defaults,
+      preferences: { ...defaults.preferences, hostTrackingEnabled: true },
+    };
+    expect((await getStatsV2()).preferences.hostTrackingEnabled).toBe(true);
+  });
+
+  it('defaults host tracking off when a stored v2 preference is missing', async () => {
+    chromeLocal[STATS_STORAGE_KEY] = {
+      version: 2,
+      preferences: { retentionDays: 90 },
+    };
+
+    expect((await getStatsV2()).preferences.hostTrackingEnabled).toBe(false);
   });
 });
 
@@ -198,6 +223,7 @@ describe('recordUsage', () => {
   });
 
   it('updates lifetime/today dimensions without double-counting; skips byHost when disabled', async () => {
+    await updateStatsPreferences({ hostTrackingEnabled: true });
     await recordUsage({
       mode: 'page',
       characters: 100,

@@ -108,7 +108,7 @@ There is no `activeTab` permission, no `scripting`, `debugger`, `cookies`, `webR
 
 The extension keeps local usage statistics (characters translated, request counts, cache hits, error counts) so the **Statistics** page can show you your own usage. These counters live in `chrome.storage.local` and IndexedDB and are **never transmitted**.
 
-When **per-site tracking** is enabled (it is on by default), the statistics also record the **hostname** of pages you translate, capped at 25 hosts per day, retained for 90 days, and shown only to you. You can turn this off in **Options → Statistics**, and you can export or erase all statistics at any time from the same page.
+Per-site tracking is **off by default**. If you enable it, statistics record the **hostname** of pages you translate, capped at 25 hosts per day, retained for 90 days, and shown only to you. You can turn it off in **Options → Statistics**, and you can export or erase all statistics at any time from the same page.
 
 ## Children's privacy
 

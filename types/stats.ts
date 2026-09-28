@@ -84,5 +84,5 @@ export const DEFAULT_STATS_V2: TranslationStatsV2 = {
   lastActiveAt: null,
   lifetime: { ...ZERO_COUNTERS },
   recentDailySummary: [],
-  preferences: { hostTrackingEnabled: true, retentionDays: 90 },
+  preferences: { hostTrackingEnabled: false, retentionDays: 90 },
 };
