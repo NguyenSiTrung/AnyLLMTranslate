@@ -309,10 +309,129 @@ describe('synthetic paste write-back (framework composers)', () => {
 
     expect(res.success).toBe(true);
     expect(res.strategy).toBe('synthetic-paste');
-    expect(order).toEqual(['selectionchange', 'paste']);
+    // Ordering is the contract: every nudge precedes the paste, and only one
+    // paste is dispatched (jsdom also emits its own selectionchange events).
+    expect(order.filter((e) => e === 'paste')).toHaveLength(1);
+    expect(order.lastIndexOf('selectionchange')).toBeLessThan(order.indexOf('paste'));
     expect(getElementText(ce)).toBe('Xin chào\nthế giới');
     // Applied as editor-owned blocks, not a raw DOM text splice.
     expect(ce.querySelectorAll('p').length).toBe(2);
+  });
+
+  it('selects the field as a text range, not an element boundary, before pasting', async () => {
+    // Measured: Lexical and Draft.js only adopt a range whose endpoints are
+    // text nodes; an element-boundary selection makes them paste at their
+    // stale model selection (translation next to the draft instead of over it).
+    const ce = pmComposer('Hello');
+    let selectionAtPaste: { anchorIsText: boolean; text: string } | null = null;
+    // Capture phase on the document: read the selection before the composer's
+    // own paste handler rewrites the field.
+    const captureSelection = () => {
+      const sel = window.getSelection()!;
+      selectionAtPaste = {
+        anchorIsText: sel.anchorNode?.nodeType === Node.TEXT_NODE,
+        text: sel.toString(),
+      };
+    };
+    document.addEventListener('paste', captureSelection, true);
+    try {
+      await writeElementTextAsync(ce, 'Xin chào');
+    } finally {
+      document.removeEventListener('paste', captureSelection, true);
+    }
+
+    expect(selectionAtPaste).not.toBeNull();
+    expect(selectionAtPaste!.anchorIsText).toBe(true);
+    expect(selectionAtPaste!.text).toBe('Hello');
+  });
+
+  it('retries with the native select-all when the first paste is ignored, and still refuses cleanly', async () => {
+    const ce = document.createElement('div');
+    ce.className = 'ProseMirror';
+    ce.contentEditable = 'true';
+    ce.tabIndex = 0;
+    ce.innerHTML = '<p>Hello</p>';
+    document.body.appendChild(ce);
+    ce.focus();
+
+    // An editor that only replaces the draft when the browser's own select-all
+    // ran first (the rescue attempt).
+    let selectAllCalls = 0;
+    const execCommand = vi.fn((command: string) => {
+      if (command !== 'selectAll') return false;
+      selectAllCalls += 1;
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    ce.addEventListener('paste', (event) => {
+      if (selectAllCalls === 0) return; // first attempt: ignored
+      event.preventDefault();
+      ce.innerHTML = '<p>Xin chào</p>';
+      ce.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }));
+    });
+
+    const res = await writeElementTextAsync(ce, 'Xin chào');
+
+    expect(execCommand).toHaveBeenCalledWith('selectAll');
+    expect(res.success).toBe(true);
+    expect(res.strategy).toBe('synthetic-paste');
+    expect(getElementText(ce)).toBe('Xin chào');
+  });
+
+  it('uses the native insertText path for Draft.js composers, which never adopt a scripted selection', async () => {
+    // Draft.js: measured 3/3 in Chromium — a synthetic paste inserts at its
+    // stale model selection and leaves the draft in place, while the native
+    // insertText command replaces the selected draft and keeps the model in
+    // sync.
+    const ce = document.createElement('div');
+    ce.className = 'public-DraftEditor-content';
+    ce.contentEditable = 'true';
+    ce.tabIndex = 0;
+    ce.innerHTML = '<div data-contents="true"><div data-block="true" data-offset-key="a-0-0">Hello</div></div>';
+    document.body.appendChild(ce);
+    ce.focus();
+
+    let pasted = false;
+    ce.addEventListener('paste', () => {
+      pasted = true;
+    });
+    const execCommand = vi.fn((command: string, _ui: boolean, value?: string) => {
+      if (command !== 'insertText') return false;
+      ce.querySelector('[data-offset-key="a-0-0"]')!.textContent = value ?? '';
+      ce.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+
+    const res = await writeElementTextAsync(ce, 'Xin chào');
+
+    expect(execCommand).toHaveBeenCalledWith('insertText', false, 'Xin chào');
+    expect(pasted).toBe(false);
+    expect(res.success).toBe(true);
+    expect(res.strategy).toBe('native-insert');
+    expect(getElementText(ce)).toBe('Xin chào');
+  });
+
+  it('refuses a Draft.js composer cleanly when the native path cannot verify, leaving the draft intact', async () => {
+    const ce = document.createElement('div');
+    ce.className = 'public-DraftEditor-content';
+    ce.contentEditable = 'true';
+    ce.tabIndex = 0;
+    ce.innerHTML = '<div data-contents="true"><div data-block="true" data-offset-key="a-0-0">Hello</div></div>';
+    document.body.appendChild(ce);
+    ce.focus();
+
+    let pasted = false;
+    ce.addEventListener('paste', () => {
+      pasted = true;
+    });
+    Object.defineProperty(document, 'execCommand', { value: vi.fn(() => false), configurable: true });
+
+    const res = await writeElementTextAsync(ce, 'Xin chào');
+
+    expect(pasted).toBe(false);
+    expect(res).toEqual({ success: false, reason: 'framework-editor' });
+    expect(getElementText(ce)).toBe('Hello');
   });
 
   it('reports a clean refusal when the editor ignores the paste, leaving the draft intact', async () => {

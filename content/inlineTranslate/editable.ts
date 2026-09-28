@@ -196,9 +196,14 @@ const BLOCK_TAGS = new Set([
  * Placeholder / decoration nodes that editors render *inside* the editable.
  * Their text is not part of the draft (Slate renders its placeholder as a real
  * span with text; reading it made an empty composer look non-empty).
+ *
+ * `[data-slate-zero-width]` is Slate's stand-in for an empty text node — it
+ * carries a zero-width space, which is not draft text either (reading it put a
+ * `\uFEFF` into every multi-paragraph draft with a blank line).
  */
 const PLACEHOLDER_SELECTOR = [
   '[data-slate-placeholder]',
+  '[data-slate-zero-width]',
   '[data-lexical-placeholder]',
   '[data-placeholder]',
   '[data-anyllm-skip]',
@@ -362,6 +367,27 @@ const FRAMEWORK_OWNED_SELECTOR = [
 export function isFrameworkOwnedEditor(el: HTMLElement): boolean {
   if (el.matches(FRAMEWORK_OWNED_SELECTOR)) return true;
   return el.querySelector(FRAMEWORK_OWNED_SELECTOR) !== null;
+}
+
+/**
+ * Draft.js-owned composers (`DraftEditor`).
+ *
+ * Split out from FRAMEWORK_OWNED_SELECTOR because Draft needs a different
+ * write path: it never adopts a scripted DOM selection into its EditorState
+ * (measured in Chromium — `selectionchange` fires and React's `onSelect` runs,
+ * yet the model selection stays collapsed), so a synthetic paste lands at that
+ * stale selection and leaves the draft in place.
+ */
+const DRAFT_OWNED_SELECTOR = [
+  '.DraftEditor-root',
+  '.public-DraftEditor-content',
+  '[data-contents="true"]',
+  '[data-offset-key]',
+].join(',');
+
+export function isDraftOwnedEditor(el: HTMLElement): boolean {
+  if (el.matches(DRAFT_OWNED_SELECTOR)) return true;
+  return el.querySelector(DRAFT_OWNED_SELECTOR) !== null;
 }
 
 /** Whether the element is still connected and editable for write-back */

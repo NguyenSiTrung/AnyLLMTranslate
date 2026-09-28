@@ -212,6 +212,28 @@ describe('write-back safety', () => {
     expect(verifyWrite(multi, 'ab')).toBe(false);
   });
 
+  it('reads around editor decorations and verifies blank-line translations through the reader normalization', () => {
+    // facet: an empty Slate paragraph renders a zero-width space, not draft text
+    const slate = composer(
+      '<div data-slate-node="element"><span data-slate-node="text"><span data-slate-leaf="true"><span data-slate-string="true">a</span></span></span></div>' +
+        '<div data-slate-node="element"><span data-slate-node="text"><span data-slate-leaf="true"><span data-slate-zero-width="z">\uFEFF</span></span></span></div>' +
+        '<div data-slate-node="element"><span data-slate-node="text"><span data-slate-leaf="true"><span data-slate-string="true">b</span></span></span></div>',
+    );
+    expect(getElementText(slate)).toBe('a\nb');
+
+    // facet: a kept blank line renders as an empty block and still verifies
+    const withBlank = composer('<p>a</p><p><br></p><p>b</p>');
+    expect(verifyWrite(withBlank, 'a\n\nb')).toBe(true);
+
+    // facet: a real mismatch is still a failure
+    expect(verifyWrite(composer('<p>a</p><p>c</p>'), 'a\n\nb')).toBe(false);
+
+    // facet: text controls keep the exact comparison
+    const ta = document.createElement('textarea');
+    ta.value = 'a\n\nb';
+    expect(verifyWrite(ta, 'a\nb')).toBe(false);
+  });
+
   it('marks the events it dispatches as synthetic', () => {
     const ce = composer('<p>Hello</p>');
     const seen: boolean[] = [];

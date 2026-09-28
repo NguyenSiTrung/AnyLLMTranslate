@@ -5,19 +5,42 @@
  * mutation alone does not sync the editor's internal state. Event-only
  * dispatch with async poll lets the framework reconcile from the event,
  * while execCommand provides a native insertion path when available.
+ *
+ * Framework composers are written through their own input pipelines — the
+ * Quill API, a synthetic Ctrl+V paste over a scripted selection, or (Draft.js)
+ * the native insertText command — each attempt verified exactly, never stacked
+ * on a half-applied edit.
  */
-import { getElementText, isFocusedWithin, isFrameworkOwnedEditor } from './editable';
+import {
+  getElementText,
+  isDraftOwnedEditor,
+  isFocusedWithin,
+  isFrameworkOwnedEditor,
+} from './editable';
 
-export { isFrameworkOwnedEditor };
+export { isDraftOwnedEditor, isFrameworkOwnedEditor };
 
 export type WriteStrategyName =
   | 'execCommand+events'
   | 'execCommand-html'
   | 'ce-event-only'
   | 'insertText-events'
+  | 'native-insert'
   | 'direct-assign'
   | 'framework-api'
   | 'synthetic-paste';
+
+/**
+ * Grace period between scripting a selection and pasting over it.
+ *
+ * Editors reconcile a scripted DOM selection asynchronously: Slate debounces
+ * `selectionchange` by a task, React-based editors re-render before their
+ * model sees it. Pasting in the same tick as the nudge made those editors use
+ * their *stale* model selection — Slate dropped the paste entirely, Lexical
+ * and Draft.js inserted the translation next to the draft instead of replacing
+ * it (measured in Chromium against the real engines).
+ */
+const FRAMEWORK_SELECTION_SETTLE_MS = 50;
 
 export type WriteFailureReason = 'framework-editor' | 'partial-change' | 'verify-failed';
 
@@ -223,13 +246,21 @@ function selectAll(el: HTMLElement): boolean {
  * real user paste (Ctrl+V/⌘V) replaces it through the editor's own pipeline —
  * the one write path that works on every framework composer. The click is
  * user-initiated, so taking focus is intended here.
+ *
+ * contentEditable uses the same text-range selection the paste path relies on
+ * (see selectWholeFieldForPaste): an element-boundary selection is ignored by
+ * Lexical/Slate/Draft, so the user's paste would land at their stale caret
+ * instead of replacing the draft. Inputs/textarea keep the plain select-all.
  */
 export function focusAndSelectContents(el: HTMLElement): boolean {
   if (!el.isConnected) return false;
   try {
-    el.focus();
-    selectContents(el);
-    return true;
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      el.focus();
+      selectContents(el);
+      return true;
+    }
+    return selectWholeFieldForPaste(el);
   } catch {
     return false;
   }
@@ -422,34 +453,69 @@ function frameworkApiWrite(el: HTMLElement, text: string): WriteBackResult {
 }
 
 /**
- * Verify a write with an exact text comparison.
- *
- * The previous `current.trim() === expected.trim()` fallback reported success
- * while the field was unchanged whenever the only difference was surrounding
- * whitespace (measured on a live ProseMirror composer).
+ * Verify a write with an exact text comparison (no `trim()` — the previous
+ * trim-based fallback reported success while the field was unchanged whenever
+ * the only difference was surrounding whitespace, measured on a live
+ * ProseMirror composer). contentEditable additionally compares through the
+ * block-aware reader's newline normalization.
  */
 export function verifyWrite(el: HTMLElement, expected: string): boolean {
+  const toLf = (text: string) => text.replace(/\r\n/g, '\n');
   const current = getElementText(el);
-  if (current === expected) return true;
-  return current.replace(/\r\n/g, '\n') === expected.replace(/\r\n/g, '\n');
+  if (toLf(current) === toLf(expected)) return true;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return false;
+  // The block-aware reader collapses runs of block-boundary newlines, so a
+  // translation that keeps a blank line between paragraphs — rendered by the
+  // editor as an empty block — can never match exactly (measured on Quill,
+  // Lexical, ProseMirror, CKEditor 5 and TinyMCE). Compare through the
+  // reader's own normalization instead of reporting a copy-panel fallback
+  // over a correctly written draft.
+  const collapseBlankLines = (text: string) => toLf(text).replace(/\n{2,}/g, '\n');
+  return collapseBlankLines(current) === collapseBlankLines(expected);
 }
 
 function isTextControl(el: HTMLElement): el is HTMLInputElement | HTMLTextAreaElement {
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
 }
 
+/** First and last non-empty text nodes under `el`, in document order. */
+function firstAndLastTextNode(el: HTMLElement, doc: Document): {
+  first: Text | null;
+  last: Text | null;
+} {
+  let first: Text | null = null;
+  let last: Text | null = null;
+  try {
+    const walker = doc.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node) {
+      const text = node as Text;
+      if (text.nodeValue && text.nodeValue.length > 0) {
+        if (!first) first = text;
+        last = text;
+      }
+      node = walker.nextNode();
+    }
+  } catch {
+    // TreeWalker unavailable — fall back to an element-boundary selection.
+  }
+  return { first, last };
+}
+
 /**
- * Select the whole editor the way framework editors actually adopt: a DOM
- * Selection placed with setBaseAndExtent plus a `selectionchange` event.
+ * Select the whole editor the way framework editors actually adopt: a range
+ * over the field's *text*, plus a `selectionchange` event.
  *
- * Measured against real engines (Chromium, prosemirror-view@1,
- * @lexical/rich-text@0.23): ProseMirror and Lexical sync the DOM selection
- * into their model only when a selectionchange reaches them, and Lexical
- * ignores addRange-built selections outright — without this nudge the paste
- * inserts at the editor's stale model selection and the draft survives
- * alongside the translation (prepend/append instead of replace).
- * execCommand('selectAll') is not used: on ProseMirror the adopted selection
- * can exclude trailing whitespace, leaving residue after the paste.
+ * Measured in Chromium against the real engines (prosemirror-view, Lexical,
+ * Slate, Draft.js, Quill, CKEditor 5, TinyMCE): the endpoint *shape* decides
+ * whether the editor adopts the selection at all. A range whose endpoints are
+ * the editable element itself (`setBaseAndExtent` / `selectNodeContents` /
+ * `execCommand('selectAll')`) is ignored by Lexical and Draft.js — their paste
+ * then lands at the stale model selection and the draft survives alongside the
+ * translation — while a range from the first to the last text node is adopted
+ * by every measured editor. `execCommand('selectAll')` is still available as a
+ * rescue attempt (see strategySyntheticPaste), never as the primary path: on
+ * ProseMirror it can exclude trailing whitespace and leave residue.
  */
 function selectWholeFieldForPaste(el: HTMLElement): boolean {
   if (!isFocusedWithin(el)) return false;
@@ -458,14 +524,46 @@ function selectWholeFieldForPaste(el: HTMLElement): boolean {
   const sel = doc.defaultView?.getSelection?.() ?? window.getSelection();
   if (!sel) return false;
   try {
-    sel.setBaseAndExtent(el, 0, el, el.childNodes.length);
-  } catch {
     const range = doc.createRange();
-    range.selectNodeContents(el);
+    const { first, last } = firstAndLastTextNode(el, doc);
+    if (first && last) {
+      range.setStart(first, 0);
+      range.setEnd(last, (last.nodeValue ?? '').length);
+    } else {
+      // Empty field: nothing to read, and the paste replaces nothing anyway.
+      range.selectNodeContents(el);
+    }
     sel.removeAllRanges();
     sel.addRange(range);
+  } catch {
+    return false;
   }
   // Nudge editors to adopt the selection before the paste lands.
+  try {
+    dispatchInlineEvent(doc, new Event('selectionchange'));
+  } catch {
+    // Engines that reject synthetic document events — paste still goes out.
+  }
+  return true;
+}
+
+/**
+ * Rescue selection for editors that only adopt the browser's own select-all
+ * command (measured: Lexical with an element-boundary range). Same
+ * `selectionchange` nudge, so the editor can pull the selection into its model.
+ */
+function selectAllForPaste(el: HTMLElement): boolean {
+  if (!isFocusedWithin(el)) return false;
+  const doc = el.ownerDocument ?? document;
+  if (typeof doc.execCommand !== 'function') return false;
+  el.focus();
+  let selected: boolean;
+  try {
+    selected = doc.execCommand('selectAll');
+  } catch {
+    return false;
+  }
+  if (!selected) return false;
   try {
     dispatchInlineEvent(doc, new Event('selectionchange'));
   } catch {
@@ -487,26 +585,66 @@ function selectWholeFieldForPaste(el: HTMLElement): boolean {
  * Framework editors reconcile asynchronously, so success is decided solely by
  * exact verification of the field content, never by the event outcome.
  */
-async function strategySyntheticPaste(el: HTMLElement, text: string): Promise<boolean> {
+async function strategySyntheticPaste(el: HTMLElement, text: string): Promise<WriteBackResult> {
   // jsdom and older engines lack the constructors — nothing to simulate with.
   if (typeof DataTransfer !== 'function' || typeof ClipboardEvent !== 'function') {
-    return false;
+    return { success: false, reason: 'framework-editor' };
   }
+
+  const before = getElementText(el);
+  // The scripted range first; the browser's own select-all as a rescue for
+  // editors that ignore it. Every attempt is verified before the next one runs.
+  for (const select of [selectWholeFieldForPaste, selectAllForPaste]) {
+    // A half-applied edit must never get another strategy stacked on it.
+    if (getElementText(el) !== before) return { success: false, reason: 'partial-change' };
+    try {
+      if (!select(el)) continue;
+      // Let the editor pull the selection into its model before pasting over it.
+      await waitMs(FRAMEWORK_SELECTION_SETTLE_MS);
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      const paste = new ClipboardEvent('paste', {
+        clipboardData: data,
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+      dispatchInlineEvent(el, paste);
+      if (await waitForStableVerify(el, text, 500)) {
+        return { success: true, strategy: 'synthetic-paste', writtenText: text };
+      }
+    } catch {
+      // Try the next selection strategy.
+    }
+  }
+
+  if (getElementText(el) !== before) return { success: false, reason: 'partial-change' };
+  return { success: false, reason: 'framework-editor' };
+}
+
+/**
+ * Draft.js write path: the browser's native `insertText` command.
+ *
+ * A synthetic paste cannot replace a Draft draft: Draft never adopts a
+ * scripted DOM selection into its EditorState (measured 3/3 in Chromium —
+ * `selectionchange` fires, React's `onSelect` runs, the model selection stays
+ * put), so its paste handler inserts the translation at the stale model
+ * selection and the draft survives next to it. Draft *does* apply the native
+ * `insertText` command through its own beforeinput handling, which maps the
+ * DOM selection into the model: measured 3/3 exact replace with the model kept
+ * in sync (single- and multi-paragraph).
+ */
+async function strategyNativeInsertText(el: HTMLElement, text: string): Promise<boolean> {
+  const doc = el.ownerDocument ?? document;
+  if (typeof doc.execCommand !== 'function') return false;
   if (!selectWholeFieldForPaste(el)) return false;
+  await waitMs(FRAMEWORK_SELECTION_SETTLE_MS);
   try {
-    const data = new DataTransfer();
-    data.setData('text/plain', text);
-    const paste = new ClipboardEvent('paste', {
-      clipboardData: data,
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-    });
-    dispatchInlineEvent(el, paste);
-    return waitForStableVerify(el, text, 500);
+    if (!doc.execCommand('insertText', false, text)) return false;
   } catch {
     return false;
   }
+  return waitForStableVerify(el, text, 500);
 }
 
 /**
@@ -570,17 +708,22 @@ export async function writeElementTextAsync(el: HTMLElement, text: string): Prom
     const viaApi = frameworkApiWrite(el, text);
     if (viaApi.success) return viaApi;
 
+    // Draft.js never adopts a scripted selection, so its paste path would
+    // corrupt the draft (see strategyNativeInsertText) — native command only.
+    if (isDraftOwnedEditor(el)) {
+      const before = getElementText(el);
+      if (await strategyNativeInsertText(el, text)) {
+        return { success: true, strategy: 'native-insert', writtenText: text };
+      }
+      if (getElementText(el) !== before) {
+        return { success: false, reason: 'partial-change' };
+      }
+      return { success: false, reason: 'framework-editor' };
+    }
+
     // Then the one input every framework editor honours: a paste through its
     // own clipboard pipeline — synthetic Ctrl+V over the selected draft.
-    const before = getElementText(el);
-    if (await strategySyntheticPaste(el, text)) {
-      return { success: true, strategy: 'synthetic-paste', writtenText: text };
-    }
-    // A paste that half-applied must not be reported as a clean refusal.
-    if (getElementText(el) !== before) {
-      return { success: false, reason: 'partial-change' };
-    }
-    return { success: false, reason: 'framework-editor' };
+    return strategySyntheticPaste(el, text);
   }
 
   const before = getElementText(el);
