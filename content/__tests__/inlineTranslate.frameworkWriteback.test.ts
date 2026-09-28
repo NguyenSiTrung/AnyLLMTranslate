@@ -230,6 +230,155 @@ describe('framework API write-back (Quill)', () => {
   });
 });
 
+/* ── Synthetic paste into framework composers ──────────────────── */
+
+/**
+ * jsdom ships neither constructor; stand-ins model exactly the two properties
+ * the strategy and editor handlers rely on (spec: a synthetic clipboard
+ * event's data store contains the data the script added).
+ */
+class FakeDataTransfer {
+  private readonly entries = new Map<string, string>();
+  setData(type: string, value: string): void {
+    this.entries.set(type, value);
+  }
+  getData(type: string): string {
+    return this.entries.get(type) ?? '';
+  }
+}
+
+interface FakeClipboardEventInit extends EventInit {
+  clipboardData?: FakeDataTransfer;
+}
+
+class FakeClipboardEvent extends Event {
+  readonly clipboardData: FakeDataTransfer | null;
+  constructor(type: string, init: FakeClipboardEventInit = {}) {
+    super(type, init);
+    this.clipboardData = init.clipboardData ?? null;
+  }
+}
+
+/**
+ * ProseMirror-shaped composer with a realistic paste pipeline: reads
+ * text/plain from the event, applies it through "its model" (rewrites block
+ * HTML), prevents default, and emits its own input event — exactly what PM's
+ * view layer does for a real Ctrl+V.
+ */
+function pmComposer(initial = 'Hello'): HTMLElement {
+  const ce = document.createElement('div');
+  ce.className = 'ProseMirror';
+  ce.contentEditable = 'true';
+  ce.tabIndex = 0;
+  ce.setAttribute('role', 'textbox');
+  ce.innerHTML = `<p>${initial}</p>`;
+  ce.addEventListener('paste', (event) => {
+    const text = (event as unknown as FakeClipboardEvent).clipboardData?.getData('text/plain') ?? '';
+    if (!text) return;
+    event.preventDefault();
+    ce.innerHTML = text
+      .split('\n')
+      .map((line) => `<p>${line || '<br>'}</p>`)
+      .join('');
+    ce.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }));
+  });
+  document.body.appendChild(ce);
+  ce.focus();
+  return ce;
+}
+
+describe('synthetic paste write-back (framework composers)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('DataTransfer', FakeDataTransfer);
+    vi.stubGlobal('ClipboardEvent', FakeClipboardEvent);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('writes into a ProseMirror composer through its own paste pipeline, multi-paragraph exact', async () => {
+    const ce = pmComposer('Hello   ');
+    // The engines only adopt a selection on selectionchange; the write must
+    // nudge them before the paste lands (measured on PM 1.x / Lexical 0.23).
+    const order: string[] = [];
+    document.addEventListener('selectionchange', () => order.push('selectionchange'));
+    ce.addEventListener('paste', () => order.push('paste'));
+
+    const res = await writeElementTextAsync(ce, 'Xin chào\nthế giới');
+
+    expect(res.success).toBe(true);
+    expect(res.strategy).toBe('synthetic-paste');
+    expect(order).toEqual(['selectionchange', 'paste']);
+    expect(getElementText(ce)).toBe('Xin chào\nthế giới');
+    // Applied as editor-owned blocks, not a raw DOM text splice.
+    expect(ce.querySelectorAll('p').length).toBe(2);
+  });
+
+  it('reports a clean refusal when the editor ignores the paste, leaving the draft intact', async () => {
+    const ce = document.createElement('div');
+    ce.className = 'ProseMirror';
+    ce.contentEditable = 'true';
+    ce.tabIndex = 0;
+    ce.innerHTML = '<p>Hello</p>';
+    document.body.appendChild(ce);
+    ce.focus();
+
+    const res = await writeElementTextAsync(ce, 'Xin chào');
+
+    expect(res).toEqual({ success: false, reason: 'framework-editor' });
+    expect(getElementText(ce)).toBe('Hello');
+  });
+
+  it('reports partial-change when the editor swallows the paste but leaves the draft altered', async () => {
+    const ce = document.createElement('div');
+    ce.className = 'ProseMirror';
+    ce.contentEditable = 'true';
+    ce.tabIndex = 0;
+    ce.innerHTML = '<p>Hello</p>';
+    // An editor that prevents default, mangles the text, and never matches.
+    ce.addEventListener('paste', (event) => {
+      event.preventDefault();
+      ce.innerHTML = '<p>mangled</p>';
+    });
+    document.body.appendChild(ce);
+    ce.focus();
+
+    const res = await writeElementTextAsync(ce, 'Xin chào');
+
+    expect(res).toEqual({ success: false, reason: 'partial-change' });
+  });
+
+  it('end-to-end: triple-space in a ProseMirror chat composer replaces the draft with no copy panel', async () => {
+    const ce = pmComposer('xin chào   ');
+    mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'hello world' });
+
+    await runInlineTranslate(cfg(), { element: ce, skipStripTrailing: false });
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'translateSelection', text: 'xin chào' }),
+    );
+    expect(getElementText(ce)).toBe('hello world');
+    expect(document.querySelector(`.${COPY_PANEL_CLASS}`)).toBeNull();
+  });
+
+  it('prefers the editor-native API over the synthetic paste when both exist', async () => {
+    const { container, editor } = quillComposer('Hello   ');
+    const quill = fakeQuill(editor);
+    (container as unknown as { __quill: FakeQuill }).__quill = quill;
+    // A paste handler that would also work — must not be reached.
+    editor.addEventListener('paste', (evt) => {
+      evt.preventDefault();
+      editor.innerHTML = '<p>via paste</p>';
+    });
+
+    const res = await writeElementTextAsync(editor, 'Xin chào');
+
+    expect(quill.setText).toHaveBeenCalledWith('Xin chào');
+    expect(res.strategy).toBe('framework-api');
+  });
+});
+
 /* ── Redesigned copy panel ─────────────────────────────────────── */
 
 describe('copy panel', () => {

@@ -16,7 +16,8 @@ export type WriteStrategyName =
   | 'ce-event-only'
   | 'insertText-events'
   | 'direct-assign'
-  | 'framework-api';
+  | 'framework-api'
+  | 'synthetic-paste';
 
 export type WriteFailureReason = 'framework-editor' | 'partial-change' | 'verify-failed';
 
@@ -438,11 +439,83 @@ function isTextControl(el: HTMLElement): el is HTMLInputElement | HTMLTextAreaEl
 }
 
 /**
+ * Select the whole editor the way framework editors actually adopt: a DOM
+ * Selection placed with setBaseAndExtent plus a `selectionchange` event.
+ *
+ * Measured against real engines (Chromium, prosemirror-view@1,
+ * @lexical/rich-text@0.23): ProseMirror and Lexical sync the DOM selection
+ * into their model only when a selectionchange reaches them, and Lexical
+ * ignores addRange-built selections outright — without this nudge the paste
+ * inserts at the editor's stale model selection and the draft survives
+ * alongside the translation (prepend/append instead of replace).
+ * execCommand('selectAll') is not used: on ProseMirror the adopted selection
+ * can exclude trailing whitespace, leaving residue after the paste.
+ */
+function selectWholeFieldForPaste(el: HTMLElement): boolean {
+  if (!isFocusedWithin(el)) return false;
+  el.focus();
+  const doc = el.ownerDocument ?? document;
+  const sel = doc.defaultView?.getSelection?.() ?? window.getSelection();
+  if (!sel) return false;
+  try {
+    sel.setBaseAndExtent(el, 0, el, el.childNodes.length);
+  } catch {
+    const range = doc.createRange();
+    range.selectNodeContents(el);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  // Nudge editors to adopt the selection before the paste lands.
+  try {
+    dispatchInlineEvent(doc, new Event('selectionchange'));
+  } catch {
+    // Engines that reject synthetic document events — paste still goes out.
+  }
+  return true;
+}
+
+/**
+ * Simulate the exact event a real Ctrl+V produces: a `paste` ClipboardEvent
+ * carrying `text/plain` in a script-built DataTransfer, dispatched over the
+ * selected draft. Editors apply pastes through their own clipboard pipeline —
+ * the one write path they never fight (the copy panel's manual flow relies on
+ * the same fact) — and per the Clipboard spec a synthetic event's data store
+ * contains exactly the data the script added, so a compliant editor handler
+ * cannot tell it from a user paste. The system clipboard is never touched and
+ * no clipboard permission is needed.
+ *
+ * Framework editors reconcile asynchronously, so success is decided solely by
+ * exact verification of the field content, never by the event outcome.
+ */
+async function strategySyntheticPaste(el: HTMLElement, text: string): Promise<boolean> {
+  // jsdom and older engines lack the constructors — nothing to simulate with.
+  if (typeof DataTransfer !== 'function' || typeof ClipboardEvent !== 'function') {
+    return false;
+  }
+  if (!selectWholeFieldForPaste(el)) return false;
+  try {
+    const data = new DataTransfer();
+    data.setData('text/plain', text);
+    const paste = new ClipboardEvent('paste', {
+      clipboardData: data,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    dispatchInlineEvent(el, paste);
+    return waitForStableVerify(el, text, 500);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Write text into an editable element using a strategy chain with verification.
  *
- * Framework-owned composers are refused outright (see isFrameworkOwnedEditor),
- * and the chain stops as soon as the field content changes without matching —
- * stacking another strategy on a half-applied edit is what corrupted drafts.
+ * Framework-owned composers go editor-native API first, then synthetic paste,
+ * and are refused (see isFrameworkOwnedEditor) only when neither verifies; the
+ * chain stops as soon as the field content changes without matching — stacking
+ * another strategy on a half-applied edit is what corrupted drafts.
  */
 export function writeElementText(el: HTMLElement, text: string): WriteBackResult {
   if (isFrameworkOwnedEditor(el)) return frameworkApiWrite(el, text);
@@ -492,7 +565,22 @@ export function writeElementText(el: HTMLElement, text: string): WriteBackResult
  */
 export async function writeElementTextAsync(el: HTMLElement, text: string): Promise<WriteBackResult> {
   if (isFrameworkOwnedEditor(el)) {
-    return frameworkApiWrite(el, text);
+    // Editor-native API first (Quill today): exact write through the editor's
+    // own model, lands in its undo history.
+    const viaApi = frameworkApiWrite(el, text);
+    if (viaApi.success) return viaApi;
+
+    // Then the one input every framework editor honours: a paste through its
+    // own clipboard pipeline — synthetic Ctrl+V over the selected draft.
+    const before = getElementText(el);
+    if (await strategySyntheticPaste(el, text)) {
+      return { success: true, strategy: 'synthetic-paste', writtenText: text };
+    }
+    // A paste that half-applied must not be reported as a clean refusal.
+    if (getElementText(el) !== before) {
+      return { success: false, reason: 'partial-change' };
+    }
+    return { success: false, reason: 'framework-editor' };
   }
 
   const before = getElementText(el);

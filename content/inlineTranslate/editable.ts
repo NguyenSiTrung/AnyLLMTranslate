@@ -343,8 +343,9 @@ export function isFocusedWithin(el: HTMLElement): boolean {
  * (native `execCommand`, synthetic `beforeinput`/`input`, manual DOM inserts,
  * `innerHTML`) and Lexical duplicates text when both `beforeinput` and `input`
  * are dispatched. Writing to these composers corrupts or desyncs the draft, so
- * inline translate refuses to touch them and hands the translation to the user
- * instead.
+ * inline translate writes only through the editor's own paths (native API,
+ * then a synthetic paste event) and hands the translation to the user when
+ * neither verifies.
  */
 const FRAMEWORK_OWNED_SELECTOR = [
   '.ProseMirror',
