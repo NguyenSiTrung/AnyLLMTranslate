@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How Data Travels Across the Internet</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #ffffff;
+        color: #1c1e21;
+        font: 17px/1.65 Georgia, "Nimbus Roman", serif;
+      }
+      header.site {
+        border-bottom: 1px solid #e4e6eb;
+        padding: 18px 0;
+      }
+      .wrap { max-width: 780px; margin: 0 auto; padding: 0 32px; }
+      header.site .wrap { display: flex; align-items: baseline; gap: 28px; }
+      .brand { font: 600 19px/1 "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2px; color: #111; }
+      span.links a { margin-right: 20px; color: #55606e; text-decoration: none; font: 400 15px/1 "Helvetica Neue", Arial, sans-serif; }
+      h1 { font-size: 40px; line-height: 1.18; margin: 44px 0 10px; letter-spacing: -0.4px; }
+      .byline { color: #6b7280; font: 400 14px/1.4 "Helvetica Neue", Arial, sans-serif; margin-bottom: 34px; }
+      h2 { font-size: 24px; margin: 40px 0 8px; }
+      p { margin: 0 0 20px; }
+      footer.site { border-top: 1px solid #e4e6eb; margin-top: 48px; padding: 22px 0 40px; color: #6b7280; font: 400 14px/1.5 "Helvetica Neue", Arial, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <header class="site" translate="no">
+      <div class="wrap">
+        <span class="brand">Field Notes</span>
+        <span class="links">
+          <a href="#articles">Articles</a>
+          <a href="#guides">Guides</a>
+          <a href="#about">About</a>
+        </span>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <h1>How Data Travels Across the Internet</h1>
+      <p class="byline">Updated 14 March 2026 · 6 minute read</p>
+
+      <p>Every message you send travels as small packets of data. Each packet carries a piece of the message, together with the address of its destination. Because the network treats each packet on its own, two packets from the same message can take different routes and still arrive in the same place.</p>
+
+      <h2>The role of the address</h2>
+      <p>An address tells the network where a packet should go. Routers read that address and forward the packet to the next hop they consider best at that moment. A router does not need to know the whole path. It only needs to know which neighbour brings the packet closer to its destination.</p>
+      <p>Names and addresses are not the same thing. A name is convenient for people, while an address is what machines use. A directory service translates one into the other before a connection begins.</p>
+
+      <h2>Where the delay comes from</h2>
+      <p>Latency is the time a packet spends in transit. It grows with distance, with the number of hops, and with congestion. When a link becomes busy, queues form, and every packet that waits in a queue adds to the total time.</p>
+      <p>Throughput is a different measure. A connection can carry a great deal of data and still show a long delay. A wide road moves many cars every hour, but a single car still needs time to cross it.</p>
+
+      <h2>Why the design has lasted</h2>
+      <p>The design keeps the centre simple and puts the intelligence at the edges. The network only forwards packets, while the devices at the ends decide what those packets mean. That separation let new applications appear without changing the routers in between.</p>
+      <p>It also made the system resilient. When one path fails, traffic can move to another. No single machine has to know the state of the whole network, which is why it has been able to grow far beyond its original scale.</p>
+    </main>
+
+    <footer class="site">
+      <div class="wrap">A short introduction to packet switching. Text released into the public domain.</div>
+    </footer>
+  </body>
+</html>

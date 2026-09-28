@@ -159,39 +159,18 @@ first-run setup, and the user must accept it before any translation is sent.
 
 ## 5. Screenshots and promotional assets
 
-The Listing Requirements policy rejects any submission with missing screenshots, so these are mandatory.
+The Listing Requirements policy rejects any submission with missing screenshots, so these are mandatory. The captured, submission-ready files live in [`store-assets/`](../store-assets/README.md).
 
-| Asset | Size | Required | What it must show |
-|---|---|---|---|
-| Screenshot 1 | 1280×800 | **Yes** | A bilingual web page: original paragraph with the translation directly beneath it, on a neutral, text-heavy page (a news article or documentation site — **not** a streaming service). |
-| Screenshot 2 | 1280×800 | **Yes** | The popup open on a normal page, showing the target-language selector and the translate/restore controls. |
-| Screenshot 3 | 1280×800 | **Yes** | Options → Providers, showing the provider pool with at least one configured provider (redact the API key field). |
-| Screenshot 4 | 1280×800 | Recommended | The subtitle overlay on a free, openly licensed video (e.g. a Creative Commons video or the extension's own test page) with original + translated cues visible. |
-| Screenshot 5 | 1280×800 | Recommended | The Data & privacy step of the setup wizard, showing the in-product disclosure. |
-| Promo tile | 440×280 | Optional | Brand mark plus a short tagline. |
-| Marquee | 1400×560 | Optional | Only if you want featured placement consideration. |
+| Asset                                 | Size     | Required    | What it shows                                                                              |
+| ------------------------------------- | -------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `store-assets/01-bilingual-page.png`  | 1280×800 | **Yes**     | A bilingual documentation-style article: each original paragraph with its translation beneath it, on a neutral, text-heavy page (not a streaming service). |
+| `store-assets/02-popup.png`           | 1280×800 | **Yes**     | The popup open on that page: target-language selector, translate/restore control, per-page controls. |
+| `store-assets/03-providers.png`       | 1280×800 | **Yes**     | Options → Providers: the provider pool with one configured, healthy endpoint (API-key field empty — nothing to redact). |
+| `store-assets/04-subtitles.png`       | 1280×800 | Recommended | The bilingual subtitle overlay on a playing clip, original cue above the translation. |
+| `store-assets/05-consent.png`         | 1280×800 | Recommended | The Data & privacy step of the setup wizard, showing the in-product disclosure. |
+| `store-assets/promo-tile-440x280.png` | 440×280  | Optional    | Brand mark plus tagline. |
 
-### Capture runbook
-
-```bash
-# 1. Build and load the unpacked extension
-pnpm build
-#    → chrome://extensions → Developer mode → Load unpacked → .output/chrome-mv3
-
-# 2. Configure a provider in Options → Providers (use a throwaway key), set the target language,
-#    and complete the setup wizard so the consent step is recorded.
-
-# 3. For each shot: open the page, set the browser window to exactly 1280×800 of *content* area
-#    (Chrome DevTools → Cmd/Ctrl+Shift+M → Responsive → 1280×800 gives an exact canvas),
-#    then capture:
-#      DevTools → Cmd/Ctrl+Shift+P → "Capture screenshot"   (captures the 1280×800 viewport)
-#    Save as PNG.
-
-# 4. Redact anything sensitive: API key fields, account names, personal email, real URLs you
-#    do not want published.
-
-# 5. Verify every image is exactly 1280×800 and shows the extension actually working.
-```
+Provenance, redactions, and regeneration steps are in [`store-assets/README.md`](../store-assets/README.md); the reproducible capture setup (loopback endpoint stub, demo pages, clip renderer, compositor) is [`store-assets/capture-kit/`](../store-assets/capture-kit/README.md). `02-popup.png` is the only composite: Chrome renders the popup in its own window, so the script pastes the unmodified popup capture onto a neutral 1280×800 backdrop.
 
 **Screenshot content rules:**
 
@@ -229,7 +208,7 @@ Keep these ready; they are the substance behind the listing.
 - [ ] `pnpm build` succeeds and `.output/chrome-mv3/manifest.json` contains no `activeTab` and a single web-accessible resource.
 - [ ] `PRIVACY.md` and the hosted `docs/guide/privacy.html` are identical in substance and reachable at the URL in §1.
 - [ ] The dashboard privacy fields match §4 exactly and match `PRIVACY.md`.
-- [ ] 1–5 screenshots at 1280×800 are uploaded.
+- [ ] The five 1280×800 frames in `store-assets/` are uploaded (they exist and are current; re-capture when a shipped UI changed — see [store-assets/README.md](../store-assets/README.md)).
 - [ ] Every permission has a justification from §3.
 - [ ] `pnpm test`, `pnpm compile`, `pnpm lint` pass.
 - [ ] `pnpm zip` produced the submission archive; a curated source archive is ready if the reviewer asks (see [PUBLISHING.md](PUBLISHING.md)).

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Packet Switching, Explained — Field Notes</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #fff; color: #1c1e21; font: 17px/1.65 Georgia, "Nimbus Roman", serif; }
+      .wrap { max-width: 980px; margin: 0 auto; padding: 0 32px; }
+      header.site { border-bottom: 1px solid #e4e6eb; padding: 16px 0; }
+      .brand { font: 600 19px/1 "Helvetica Neue", Arial, sans-serif; color: #111; }
+      h1 { font-size: 34px; line-height: 1.2; margin: 32px 0 8px; }
+      .lead { color: #4b5563; margin: 0 0 24px; }
+      video { width: 100%; background: #0b0d12; border-radius: 6px; display: block; }
+      footer.site { border-top: 1px solid #e4e6eb; margin-top: 36px; padding: 18px 0 40px; color: #6b7280; font: 400 14px/1.5 "Helvetica Neue", Arial, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <header class="site"><div class="wrap"><span class="brand">Field Notes</span></div></header>
+    <main class="wrap">
+      <h1>Packet Switching, Explained</h1>
+      <p class="lead">A short clip with captions. Start playback, then turn on the bilingual subtitles.</p>
+      <video id="clip" controls muted preload="auto" width="916" height="515" poster="">
+        <source src="/media/clip.webm" type="video/webm" />
+        <track id="captions" kind="captions" srclang="en" label="English" src="/captions.vtt" default />
+      </video>
+    </main>
+    <footer class="site"><div class="wrap">Demo clip generated for this test page. Captions released into the public domain.</div></footer>
+    <script>
+      // Keep the clip looping so the demo overlay always has an active cue.
+      const v = document.getElementById('clip');
+      v.addEventListener('ended', () => { v.currentTime = 0; v.play(); });
+    </script>
+  </body>
+</html>

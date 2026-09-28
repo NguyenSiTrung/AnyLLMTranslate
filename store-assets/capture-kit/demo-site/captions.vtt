@@ -1,0 +1,21 @@
+WEBVTT
+
+1
+00:00:00.500 --> 00:00:04.400
+Data rarely follows a single path from one place to another.
+
+2
+00:00:04.500 --> 00:00:08.200
+Instead it is split into packets, and each packet finds its own way.
+
+3
+00:00:08.300 --> 00:00:12.200
+Routers choose the next hop as the traffic arrives.
+
+4
+00:00:12.300 --> 00:00:16.000
+When one route becomes crowded, another route can take its place.
+
+5
+00:00:16.100 --> 00:00:19.400
+That is why the network keeps working as it grows.

@@ -40,13 +40,22 @@ The archive must stay buildable: `pnpm install && pnpm test && pnpm build` has t
 
 ## 🎨 Step 2: Store Assets
 
-| Asset          | Size / Format  | Requirement  | Notes                                                                                                                   |
-| -------------- | -------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Extension icon | `128x128` PNG  | **Required** | `public/icon/128.png`                                                                                                   |
-| Screenshots    | `1280x800` PNG | **Required** | 1–5. Missing screenshots is an automatic rejection. See the capture runbook in [store-listing.md](store-listing.md) §5. |
-| Promo tile     | `440x280` PNG  | Optional     | Improves discoverability                                                                                                |
+| Asset          | Size / Format  | Requirement  | File                                                             |
+| -------------- | -------------- | ------------ | ---------------------------------------------------------------- |
+| Extension icon | `128x128` PNG  | **Required** | `public/icon/128.png`                                            |
+| Screenshots    | `1280x800` PNG | **Required** | `store-assets/01-…` … `05-…` ([list](../store-assets/README.md)) |
+| Promo tile     | `440x280` PNG  | Optional     | `store-assets/promo-tile-440x280.png`                            |
 
-**Screenshot content rules:** show the product working; no streaming-service UI; no real API keys or personal data.
+Missing screenshots is an automatic rejection, so all five 1280×800 frames in
+`store-assets/` are part of the submission, not a nice-to-have.
+
+**Screenshot content rules:** show the product working; no streaming-service UI; no real API keys or personal data. The committed assets satisfy
+this: they were captured from the built extension against a loopback endpoint
+and local demo pages, so no provider, key, third-party site, or footage appears.
+[store-assets/README.md](../store-assets/README.md) records the provenance of
+each frame and how to regenerate them;
+[store-assets/capture-kit](../store-assets/capture-kit/README.md) is the
+reproducible capture setup. Re-capture whenever a shipped UI changes.
 
 ---
 
@@ -88,9 +97,11 @@ Summary of what the manifest declares:
 
 1. Create a developer account and pay the one-time **$5 USD** fee.
 2. Enable **2-Step Verification** — required before publishing.
-3. Upload `.output/anyllm-translate-<version>-chrome.zip`.
-4. Fill in the Store Listing, Privacy practices, and permission justifications from [store-listing.md](store-listing.md).
-5. Submit for review.
+3. Set the **public developer name and contact email**, and complete the **EU DSA trader declaration**. The dashboard requires the declaration before an item can be distributed in the EU: a _trader_ declaration makes your business contact details public; a _non-trader_ declaration keeps them private but restricts EU availability. Decide which applies to you and confirm the current wording in the dashboard.
+4. Upload `.output/anyllm-translate-<version>-chrome.zip`.
+5. Fill in the Store Listing, Privacy practices, and permission justifications from [store-listing.md](store-listing.md). Upload the five 1280×800 frames in [store-assets](../store-assets/README.md) in filename order.
+6. Keep `source-code.zip` at hand: the dashboard has a source-code upload field and a reviewer who wants to verify the network behaviour of a broad-host extension may ask for it. Upload it pre-emptively if the field is offered.
+7. Submit for review.
 
 _Review timeline:_ the content script matches `<all_urls>` and the manifest declares `tabs`, so Chrome shows the "Read and change all your data on all websites" warning and the listing typically receives a **manual review**. Expect days to a few weeks.
 
@@ -99,5 +110,6 @@ _Review timeline:_ the content script matches `<all_urls>` and the manifest decl
 ## 📋 Step 6: Post-approval
 
 - Keep the privacy policy, dashboard fields, and extension behaviour in sync on every release.
+- The store assigns the extension ID from the uploaded package. The manifest currently sets no `key`, so the published ID will differ from the unpacked build's local ID. To keep the two aligned for development, copy the item's public key from the dashboard into the manifest `key` field before the next upload.
 - A release that adds a permission forces every existing user to re-consent; add optional permissions via `optional_host_permissions` plus `chrome.permissions.request()` instead of widening the required set.
 - Re-run the pre-submission checklist in [store-listing.md](store-listing.md) §7 before each update.
