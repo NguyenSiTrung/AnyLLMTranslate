@@ -1,0 +1,1 @@
+AnyLLMTranslate-ycjf: curated reviewer source archive. tests/unit/sourceArchive.test.ts asserts the allow-list ships build/test inputs and excludes internal paths; verified archive extraction builds (wxt prepare, tsc, wxt build) and runs tests; pnpm zip:source smoke-tested (received.
