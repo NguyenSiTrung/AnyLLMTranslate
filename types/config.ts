@@ -596,7 +596,7 @@ export interface InlineTranslateSettings {
   triggerKey: string;
   /** Number of consecutive key presses required (2–5, default: 3) */
   tapCount: number;
-  /** Time window in ms for consecutive presses (200–2000, default: 1000) */
+  /** Time window in ms for consecutive presses (200–2000, default: 1500) */
   timeWindowMs: number;
   /** Target language for inline translation (ISO 639-1 code) */
   targetLanguage: string;
@@ -729,6 +729,16 @@ export interface ExtensionSettings {
    */
   safeKeyThrottleMigrated?: boolean;
   /**
+   * One-time migration flag: installs that saved settings while the inline
+   * gesture window default was 500/1000ms were upgraded to the current
+   * {@link DEFAULT_INLINE_TRANSLATE_SETTINGS} window (stored values win the
+   * deep merge, so the tight default would otherwise stick forever). Once
+   * true, loadSettings will not re-apply that upgrade, so users may re-tighten
+   * the window without being reset. New installs start as true (defaults
+   * already comfortable).
+   */
+  inlineGestureWindowMigrated?: boolean;
+  /**
    * Multi-provider pool: multiple active providers, each with one or more API
    * keys, rotated round-robin with circuit-breaker failover. Empty for legacy
    * users until migrated by loadSettings() (see FR-1 migration rule).
@@ -848,8 +858,14 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  /** 1000ms — 500ms was too tight for deliberate Space×3 on many keyboards */
-  timeWindowMs: 1000,
+  /**
+   * 1500ms total span for the burst. The window is a shared first→last-press
+   * budget (per-gap ≈ window/(tapCount−1)), so 500ms felt like hammering and
+   * 1000ms still forced a rushed 500ms/gap average for deliberate Space×3.
+   * 1500ms gives ~750ms/gap — comfortable without making stray double-spaces
+   * combine into accidental triggers (any non-trigger key resets the burst).
+   */
+  timeWindowMs: 1500,
   targetLanguage: 'en',
   idleMs: 0,
   triggerGapMs: 0,
@@ -986,6 +1002,12 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
    * loadSettings when no stored settings exist (defaults already safe).
    */
   safeKeyThrottleMigrated: false,
+  /**
+   * False so existing installs (merged from storage without this field) still
+   * run the one-time 500/1000ms → current-default gesture-window upgrade.
+   * Fresh installs set true in loadSettings when no stored settings exist.
+   */
+  inlineGestureWindowMigrated: false,
   /**
    * A brand-new install ships with exactly one default pool provider (mirroring
    * the legacy single-provider behavior) so the coordinator always has at least

@@ -7,6 +7,7 @@ import type { ExtensionSettings, SiteRule, PoolProvider, PoolKey, ProviderConfig
 import {
   DEFAULT_SETTINGS,
   CRITICAL_GLOBAL_EXCLUDES,
+  DEFAULT_INLINE_TRANSLATE_SETTINGS,
   DEFAULT_KEY_MAX_RPM,
   DEFAULT_KEY_CONCURRENCY_LIMIT,
   DEFAULT_KEY_INTERVAL_MS,
@@ -150,6 +151,29 @@ function migrateSafeKeyThrottleDefaults(merged: ExtensionSettings): void {
 }
 
 /**
+ * One-time upgrade: installs that saved settings while the inline gesture
+ * window default was 500/1000ms keep that tight value forever — stored values
+ * win the deep merge — which forces an uncomfortably fast Space×N burst
+ * (per-gap ≈ window/(tapCount−1): 500ms meant ~250ms/gap). Bump only the
+ * fingerprints of the old defaults to the current default; deliberately tuned
+ * windows (e.g. 700ms, 2000ms) are left alone. Gated by
+ * `inlineGestureWindowMigrated` so a user who later re-tightens the window is
+ * not reset on every load.
+ *
+ * Returns true when the flag transitioned false→true (caller persists).
+ */
+function migrateInlineGestureWindowDefaults(merged: ExtensionSettings): boolean {
+  if (merged.inlineGestureWindowMigrated) return false;
+  merged.inlineGestureWindowMigrated = true;
+
+  const windowMs = merged.inlineTranslate?.timeWindowMs;
+  if (windowMs === 500 || windowMs === 1000) {
+    merged.inlineTranslate.timeWindowMs = DEFAULT_INLINE_TRANSLATE_SETTINGS.timeWindowMs;
+  }
+  return true;
+}
+
+/**
  * Mirror a legacy {@link ProviderConfig} partial update into providers[0] so
  * the pool stays in sync when the setup wizard or legacy ProviderSection edits
  * the provider fields. If providers[] is empty, seeds a single-provider pool.
@@ -255,6 +279,8 @@ export async function loadSettings(): Promise<ExtensionSettings> {
         ...DEFAULT_SETTINGS,
         // Defaults already use safe key throttle — mark migration done.
         safeKeyThrottleMigrated: true,
+        // Defaults already use the comfortable gesture window — mark done.
+        inlineGestureWindowMigrated: true,
         siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
       };
     }
@@ -309,6 +335,9 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     const needsThrottlePersist = !merged.safeKeyThrottleMigrated;
     migrateSafeKeyThrottleDefaults(merged);
 
+    // Upgrade tight legacy inline gesture windows (500/1000ms) once per install.
+    const needsGestureWindowPersist = migrateInlineGestureWindowDefaults(merged);
+
     // Migrate legacy preset: 'ollama' → 'custom' (Ollama is OpenAI-compatible)
     if ((merged.provider.preset as string) === 'ollama') {
       merged.provider.preset = 'custom';
@@ -321,9 +350,10 @@ export async function loadSettings(): Promise<ExtensionSettings> {
       merged.provider.connectionStatus = 'unknown';
     }
 
-    // Persist one-time throttle migration so the flag sticks and later
-    // intentional "unlimited" (0) choices are not re-upgraded on every load.
-    if (needsThrottlePersist) {
+    // Persist one-time migrations so the flags stick and later intentional
+    // choices (throttle "unlimited" 0s, a re-tightened gesture window) are not
+    // re-upgraded on every load.
+    if (needsThrottlePersist || needsGestureWindowPersist) {
       void saveSettings(merged).catch(() => {
         /* best-effort; next load will re-attempt migration */
       });

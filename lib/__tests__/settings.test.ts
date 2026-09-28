@@ -18,7 +18,7 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       enabled: true,
       triggerKey: ' ',
       tapCount: 3,
-      timeWindowMs: 1000,
+      timeWindowMs: 1500,
       idleMs: 0,
       enableLanguagePrefix: true,
       languagePrefix: '/',
@@ -134,6 +134,53 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       languagePrefix: '',
     });
     expect(emptyPrefix.before.startsWith('/en ')).toBe(true);
+  });
+});
+
+describe('inline gesture window migration', () => {
+  function mockStored(stored: Record<string, unknown>) {
+    const get = vi.fn().mockResolvedValue({ 'anyllm-translate-settings': stored });
+    const set = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis, 'chrome', {
+      value: {
+        storage: {
+          local: { get, set },
+          session: { get: vi.fn(), set: vi.fn() },
+        },
+        runtime: { id: 'test-ext' },
+      },
+      writable: true,
+      configurable: true,
+    });
+    return { set };
+  }
+
+  it('upgrades stuck 500/1000ms defaults to the current default once and leaves tuned windows alone', async () => {
+    // 500ms (first default) and 1000ms (second default) are fingerprints of
+    // "saved settings, never customized" — stored values win the deep merge,
+    // so without this upgrade those installs keep the too-fast burst forever.
+    for (const legacy of [500, 1000]) {
+      const { set } = mockStored({ inlineTranslate: { timeWindowMs: legacy } });
+      const settings = await loadSettings();
+      expect(settings.inlineTranslate.timeWindowMs).toBe(
+        DEFAULT_INLINE_TRANSLATE_SETTINGS.timeWindowMs,
+      );
+      expect(settings.inlineGestureWindowMigrated).toBe(true);
+      // Flag transition is persisted so the upgrade runs only once.
+      await vi.waitFor(() => expect(set).toHaveBeenCalled());
+    }
+
+    // A deliberately tuned window is never touched (and the flag still sticks).
+    mockStored({ inlineTranslate: { timeWindowMs: 700 } });
+    expect((await loadSettings()).inlineTranslate.timeWindowMs).toBe(700);
+
+    // Once migrated, even a fingerprint value is left alone — the user
+    // re-tightened the window and must not be reset on every load.
+    mockStored({
+      inlineTranslate: { timeWindowMs: 500 },
+      inlineGestureWindowMigrated: true,
+    });
+    expect((await loadSettings()).inlineTranslate.timeWindowMs).toBe(500);
   });
 });
 

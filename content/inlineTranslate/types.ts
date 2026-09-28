@@ -23,8 +23,8 @@ export const DEFAULT_RUNTIME_CONFIG: InlineTranslateRuntimeConfig = {
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  /** 1000ms is more forgiving than 500ms for deliberate Space×3 taps */
-  timeWindowMs: 1000,
+  /** Keep in sync with DEFAULT_INLINE_TRANSLATE_SETTINGS.timeWindowMs (1500ms) */
+  timeWindowMs: 1500,
   targetLanguage: 'en',
   idleMs: 0,
   triggerGapMs: 0,
