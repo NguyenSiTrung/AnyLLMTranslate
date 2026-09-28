@@ -81,7 +81,7 @@
 | `build:firefox` | `wxt build -b firefox` | Production build for Firefox |
 | `zip` | `wxt zip` | Package for Chrome Web Store |
 | `zip:firefox` | `wxt zip -b firefox` | Package for Firefox Add-ons |
-| `zip:source` | `git archive -o source-code.zip HEAD` | Export source archive from HEAD |
+| `zip:source` | `bash scripts/source-archive.sh` | Reviewer source archive from a curated allow-list (see `docs/PUBLISHING.md`) |
 | `compile` | `tsc --noEmit` | Type-check without emitting |
 | `test` | `vitest run` | Run test suite once |
 | `test:fast` | `vitest run lib tests/unit` | Fast subset — lib + tests/unit only |
