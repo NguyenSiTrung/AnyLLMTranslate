@@ -1,0 +1,1 @@
+AnyLLMTranslate-107r: Default host tracking off for new and migrated stats; preserve explicit user preference. Update privacy copy and regression tests. Verified stats/UI Vitest suites and pnpm compile.
