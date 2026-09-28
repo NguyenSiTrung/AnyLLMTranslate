@@ -89,11 +89,13 @@ fi
 # bd (beads) task tracker
 #
 # AGENTS.md makes bd the task tracker for this repo and the orb base image does
-# not ship it, so install it the way .beads/README.md documents. The local Dolt
-# database is intentionally left alone: `bd prime` hydrates it from the current
-# .beads/issues.jsonl, and a pre-warmed database would silently shadow a newer
-# export. Best-effort only: this must not block the snapshot that carries the
-# extension toolchain.
+# not ship it, so install it the way .beads/README.md documents. The Dolt
+# database is cloned from the project's refs/dolt/data remote (bd bootstrap),
+# not hydrated from .beads/issues.jsonl: the JSONL export is an upsert-only
+# passive view that can lag the Dolt remote or miss deletions, and letting the
+# empty-database JSONL auto-import run first creates a local history with no
+# common ancestor with the remote. Best-effort only: this must not block the
+# snapshot that carries the extension toolchain.
 # ---------------------------------------------------------------------------
 if ! command -v bd >/dev/null 2>&1; then
   log "Installing bd (beads)"
@@ -105,6 +107,18 @@ fi
 if command -v bd >/dev/null 2>&1; then
   # bd warns on every command while .beads is group/world readable.
   chmod 700 .beads 2>/dev/null || true
+  # Fresh checkouts have no beads.role, and the deprecated HTTPS-remote heuristic
+  # would misdetect orbs (anonymous HTTPS clone) as contributors. The repo owner
+  # is the maintainer, so pin it explicitly.
+  git config beads.role maintainer 2>/dev/null || true
+  # Clone the Dolt database from refs/dolt/data BEFORE any other bd command can
+  # auto-import from .beads/issues.jsonl (which would diverge from the remote
+  # lineage). With the database already present (warm snapshot) bootstrap just
+  # validates; the pull then refreshes whatever the snapshot froze.
+  bd bootstrap --yes 2>/dev/null || \
+    printf 'WARNING: bd bootstrap failed; rerun it once network is available.\n' >&2
+  bd dolt pull 2>/dev/null || \
+    printf 'WARNING: bd dolt pull failed; rerun it once network is available.\n' >&2
 fi
 
 # ---------------------------------------------------------------------------
@@ -158,9 +172,12 @@ if ! grep -Fq "$guidance_marker" "$guidance" 2>/dev/null; then
   - tests: `services/scientific-pdf-bridge/.venv/bin/python -m pytest -q`
   - API in mock mode: `cd services/scientific-pdf-bridge && MOCK_TRANSLATE=1 .venv/bin/python -m uvicorn app.main:app --port 17890`
   Real pdf2zh translation is not installed (too heavy for a snapshot).
-- `bd` (beads) is installed. Run `bd prime` first: it hydrates the local Dolt database
-  from `.beads/issues.jsonl`. The repository's Git Policy still applies, so run
-  `bd dolt push` only when the user asks for it.
+- `bd` (beads) is installed and its Dolt database is cloned from `refs/dolt/data`
+  on origin (setup ran `bd bootstrap`; `beads.role` is pinned to maintainer).
+  Session start: run `bd prime` for workflow context, then `bd dolt pull` to fetch
+  current issue data — `.beads/issues.jsonl` is a passive export that can lag or
+  miss deletions. If the database is ever missing, run `bd bootstrap --yes` before
+  any other bd command. `bd dolt push` only when the user asks (Git Policy).
 GUIDANCE
 fi
 

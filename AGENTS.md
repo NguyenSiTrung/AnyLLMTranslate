@@ -148,6 +148,12 @@ survives regeneration.
 - **Branch integration** (merge / open PR / keep as-is) stays exactly as the
   `finishing-a-development-branch` menu defines it — the user picks, and work is
   discarded only on the typed word `discard`.
+- **`bd dolt pull`: expected at session start** and before relying on `bd ready`/
+  `bd list`. It fetches only `refs/dolt/data` (beads issue data), never code
+  refs, so it is not a code sync. The local Dolt database is the source of
+  truth; `.beads/issues.jsonl` in the checkout is a passive export that can lag
+  the remote or miss deletions. If no database exists yet (fresh machine), run
+  `bd bootstrap --yes` first — it clones the remote lineage and wires `origin`.
 - **`bd dolt push`: NOT per task.** Run once when the user asks, normally at
   session end, alongside `bd close` and note updates.
 - **`bd close` / `bd update --notes`** for the task just finished: run as normal
