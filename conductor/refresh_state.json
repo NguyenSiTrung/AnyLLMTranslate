@@ -1,5 +1,5 @@
 {
-  "lastRefresh": "2026-09-28T20:40:00+07:00",
+  "lastRefresh": "2026-09-29T08:09:06+07:00",
   "scope": "all",
   "changes": [
     "Scope: full refresh ('/conductor-refresh' with no argument; scope 'all' matches every prior refresh). Reconciled product, tech-stack, tracks, patterns and workflow against master since the 2026-09-12 refresh: 42 commits, 342 files, +37514/-17921 (f9f169d..a7171e9), all shipped untracked via superpowers specs/plans + Beads.",
@@ -10,6 +10,7 @@
     "patterns.md: rescanned 71 archived learnings (0 active) — still no new learnings.md since 2026-08-04, so the strict cross-track consolidation scan produced no candidates again. Six pattern sections were elevated directly from the commit window: settings IA (tab registry + per-concern cards), page translation (shadow roots, lifecycle, per-piece failure), inline translate (framework write-back ladder), test suite (consolidation + flake economics), Subtitle Plus mode (frozen terminology, single reveal), privacy consent (enforcement boundary). A lint-baseline gotcha was added to the Gotchas section. Footer 'Last refreshed' rewritten.",
     "beads: the refresh also FILED one issue — AnyLLMTranslate-e140 (P2 bug) 'Restore the ESLint gate: 38 errors at HEAD, mostly test-consolidation fallout', with the full per-file/per-line breakdown and an acceptance bar of `pnpm lint` exit 0 with the suite still at 742/742. 33 issues were closed on/after 2026-09-12 — the ten web-translation audit items (ui6, d02, bpmp, 0mna, 930c, 5yp4, sm7n, t9dd, bedw, 0zh1), the test-suite items (1yfn, 1yfn.1, 1yfn.2, 1yfn.3, stsf), the inline-translate items (9f5g, rps9, tzzu, 8h7s, and the revived 3hj Discord/Lexical desync), the nine CWS items (9l5m, bg9i, sl0y, 2e8w, bvp3, 9yh3, pg9n, ubih, 107r), and the audit follow-ups gmj, s32, dazd. Live tracker at refresh time: 5 open (9e85 P2 third-party license attributions, isc P2 mini-studio mode switch must cancel+re-activate the session, 2vm P3 settle the Plus run in the remaining track-identity guards, c27o P3 trademark hygiene, e140 P2 lint gate) + 2 in progress (2wtc CWS store listing has no screenshots or description copy, 3sj Subtitle Plus mode — implementation shipped as a8257a3..71b0357 but the record was not closed). 525 closed records total. Note: gmj and s32 were declared purged at the 2026-09-12 refresh and reappeared and were closed, so those purges were not permanent; the 279->525 closed delta is a database-view change, not 246 new closures in this window.",
     "verification: `pnpm test` run three times on 2026-09-28 — run 1: 740/742 (failures in services/__tests__/background.streamStats.test.ts and content/__tests__/subtitleCoordinator.test.ts), run 2: 741/742, run 3: 742/742 green in 57.57 s. Both failing files pass in isolation (8/8 and 61/61) and the failing set moved between runs, so this is the documented load-sensitive class, not a product regression. `pnpm compile` (tsc --noEmit) 0 errors. `pnpm lint` 38 errors — NOT green. Coverage via `vitest run --coverage` (V8 JSON totals, 232 covered files): 80.26 % statements / 77.40 % branches / 83.08 % functions. `pnpm build` 3.92 MB (WXT total; du 3.9M). Backups of all five edited files in /tmp/conductor-bak-20260928/.",
+    "2026-09-29 refresh: Reviewed the two commits after 9b0b9a3 (Subtitle Plus toggle moved into a dedicated Translation mode card with tests; Chrome Web Store screenshots, promo tile, and reproducible capture kit added). Product capability, dependencies, CI workflows, methodology, and active Conductor tracks unchanged; no track plan checkboxes to sync. Learning census remains 71 archived / 0 active with no new learning files; no new project-wide pattern. Beads updated to 7 open / 2 in progress / 526 closed; two new open issues are n9ur (reproducible streamStats dedup regression) and el3x (mini-progress chip counted as translatable page content). The 2wtc in-progress issue records dashboard listing/screenshots completion in notes but remains open in status; 3sj remains in progress pending manual browser smoke and follow-ups. Quality gates were not rerun; carry forward the 2026-09-28 measured baseline (742/117 tests, tsc 0, lint 38 errors, build 3.92 MB, coverage 80.26/77.40/83.08). Backup copies: /tmp/conductor-bak-20260929/.",
     "committed: conductor/*.md + conductor/refresh_state.json only (conductor-only commit). The tracked .beads/ exports showed no diff even after the refresh created AnyLLMTranslate-e140 — `.beads/issues.jsonl` is a passive export and lags the local Dolt DB, so the new record exists in the DB only; the next `bd dolt push` (on user request, per the AGENTS.md Git Policy — never automatic) carries it to the remote. NOT pushed: AGENTS.md Git Policy says conductor commits locally and only the user decides when to push."
   ],
   "codebaseHealth": {
@@ -69,45 +70,30 @@
   },
   "beads": {
     "open": [
-      "AnyLLMTranslate-9e85 (P2) Add third-party license attributions to the shipped bundle",
+      "AnyLLMTranslate-n9ur (P2 bug) [test] background.streamStats dedup case fails at HEAD (bedw behaviour regressed)",
+      "AnyLLMTranslate-el3x (P2 bug) In-page progress chip is walked as page content; run counter never reaches 100%",
+      "AnyLLMTranslate-e140 (P2 bug) Restore the ESLint gate: 38 errors at HEAD, mostly test-consolidation fallout",
       "AnyLLMTranslate-isc (P2 bug) Mini studio mode switch must cancel and re-activate the subtitle session",
+      "AnyLLMTranslate-9e85 (P2) Add third-party license attributions to the shipped bundle",
       "AnyLLMTranslate-2vm (P3 bug) Settle the Plus run in the remaining track-identity guards and dismiss the sticky activation toast on seek",
-      "AnyLLMTranslate-c27o (P3) Trademark hygiene: drop OpenAI from the manifest description; rename the Netflix style preset",
-      "AnyLLMTranslate-e140 (P2 bug, filed by this refresh) Restore the ESLint gate: 38 errors at HEAD, mostly test-consolidation fallout"
+      "AnyLLMTranslate-c27o (P3) Trademark hygiene: drop OpenAI from the manifest description; rename the Netflix style preset"
     ],
     "inProgress": [
-      "AnyLLMTranslate-2wtc CWS blocker: store listing has no screenshots or description copy",
-      "AnyLLMTranslate-3sj Subtitle Plus mode — opt-in full-track quality translation (implementation shipped; record not closed)"
+      "AnyLLMTranslate-2wtc (P0) CWS listing/screenshots issue; dashboard work is recorded complete in issue notes, but issue remains in progress",
+      "AnyLLMTranslate-3sj Subtitle Plus mode — implementation shipped; manual smoke and follow-ups remain"
     ],
-    "closedInWindow": [
-      "AnyLLMTranslate-ui6", "AnyLLMTranslate-d02", "AnyLLMTranslate-bpmp", "AnyLLMTranslate-0mna", "AnyLLMTranslate-930c",
-      "AnyLLMTranslate-5yp4", "AnyLLMTranslate-sm7n", "AnyLLMTranslate-t9dd", "AnyLLMTranslate-bedw", "AnyLLMTranslate-0zh1",
-      "AnyLLMTranslate-1yfn", "AnyLLMTranslate-1yfn.1", "AnyLLMTranslate-1yfn.2", "AnyLLMTranslate-1yfn.3", "AnyLLMTranslate-stsf",
-      "AnyLLMTranslate-9f5g", "AnyLLMTranslate-rps9", "AnyLLMTranslate-tzzu", "AnyLLMTranslate-8h7s", "AnyLLMTranslate-3hj",
-      "AnyLLMTranslate-9l5m", "AnyLLMTranslate-bg9i", "AnyLLMTranslate-sl0y", "AnyLLMTranslate-2e8w", "AnyLLMTranslate-bvp3",
-      "AnyLLMTranslate-9yh3", "AnyLLMTranslate-pg9n", "AnyLLMTranslate-ubih", "AnyLLMTranslate-107r",
-      "AnyLLMTranslate-gmj", "AnyLLMTranslate-s32", "AnyLLMTranslate-dazd"
-    ],
-    "closedTotal": 525,
+    "closedInWindow": [],
+    "closedTotal": 526,
     "syncDirection": "skip",
-    "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so directional synchronization remains a no-op; sync direction is skip. The tracker is no longer clean: 4 open + 2 in progress (it was 0/0 at the 2026-09-12 refresh). gmj and s32 — declared purged at the last refresh — reappeared and were formally closed, so purges in this DB are not permanent. The previous snapshot's live set (gmj/3hj/s32) is now fully closed except for the new post-2026-09-12 records."
+    "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so no directional plan synchronization applies. Tracker counts updated from bd stats after bd dolt pull; all open and in-progress issue ids are enumerated above. Beads→Conductor sync is not applicable without an active track plan."
   },
   "learningsConsolidation": {
     "activeTrackLearnings": 0,
     "archivedTrackLearnings": 71,
     "changedTrackLearningsSincePreviousRefresh": 0,
-    "newPatternsElevated": [
-      "Settings IA — one tab registry, per-concern cards (from: c00ad44 / AnyLLMTranslate-5gn, 2026-09-12)",
-      "Page translation — shadow roots, lifecycle, per-piece failure (from: 7020f80 / AnyLLMTranslate-ui6, -d02, -bpmp, -0mna, -930c, -5yp4, -sm7n, -t9dd, -bedw, -0zh1, 2026-09-14)",
-      "Inline translate — writing the framework's model, not the DOM (from: b477741, 73dbe20, c4c6bf2, a7171e9, ed4c539 / -9f5g, -rps9, -tzzu, -8h7s, -3hj, 2026-09-20…28)",
-      "Test suite — consolidation and flake economics (from: 816192b, bd23556 / -1yfn, -1yfn.1…3, -stsf, 2026-09-14/22)",
-      "Subtitle Plus mode — frozen terminology, one reveal (from: a8257a3…71b0357 / AnyLLMTranslate-3sj, 2026-09-27)",
-      "Privacy consent as an enforcement boundary (from: 0ae4914, c0a7345, a6c48f3, 29f19bb / -9l5m, -bg9i, -sl0y, -2e8w, -bvp3, -9yh3, -pg9n, -ubih, -107r, 2026-09-25/28)"
-    ],
+    "newPatternsElevated": [],
     "duplicatesMerged": [],
-    "gotchasAdded": [
-      "The lint gate is not green at HEAD — 38 errors, 36 of them test-consolidation fallout; merging test files can move code out of its test-scoped eslint override."
-    ],
-    "note": "No new learnings.md since 2026-08-04, so the strict cross-track consolidation scan again produced no candidates. Six sections were elevated directly from the commit window."
+    "gotchasAdded": [],
+    "note": "No new learnings.md since 2026-08-04; 71 archived learning files were already scanned in the prior refresh and unchanged during this window. The two commits contain no reusable project-wide pattern candidate."
   }
 }

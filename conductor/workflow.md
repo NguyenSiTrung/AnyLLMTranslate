@@ -1,4 +1,4 @@
-<!-- conductor-refresh: 2026-09-28 all (no methodology drift — branching strategy and Conventional Commits still match the repo; ≥70 % coverage target holds at 80.26 % measured, up from 78.81 %; CI/CD unchanged at pages.yml + bridge-image.yml; 742 pass / 117 files (third full run green in 57.6 s; runs 1–2 had 2 then 1 load-sensitive failures, both green in isolation — the documented flake class, and the suite now runs under `pool: 'threads'` with a global timer hand-back); tsc 0; **lint gate is NOT green — 38 errors at HEAD**, so the phase-verification lint step records the count instead of asserting zero; build 3.92 MB) -->
+<!-- conductor-refresh: 2026-09-29 all (no workflow/methodology drift in the two post-refresh commits; test coverage target ≥70%; CI unchanged. Last measured gates remain 2026-09-28: 742/117 tests, tsc 0, lint 38 errors; not rerun for this docs-only refresh.) -->
 # Development Workflow — AnyLLMTranslate
 
 ## Branching Strategy

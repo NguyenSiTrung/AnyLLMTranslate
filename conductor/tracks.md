@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
-<!-- conductor-refresh: 2026-09-28 all (73 archived / 0 active — unchanged since 2026-08-04, 6th consecutive untracked window; 742 pass across 117 files (third full run green in 57.6 s; runs 1–2 had load-sensitive failures, both green in isolation); tsc 0; **lint 38 errors — gate not green**; build 3.92 MB; coverage 80.26 %; Beads **5 open / 2 in progress / 525 closed** — the tracker is no longer clean, the new records (`2wtc`, `3sj`, `isc`, `2vm`, `c27o`, `9e85`, plus `e140` filed for the 38-error lint regression) are all post-2026-09-12 work; this window shipped untracked via superpowers specs+plans and Beads: settings-IA restructure, web-lifecycle/shadow-DOM hardening, two test consolidations, inline-translate framework write-back, CWS privacy consent, Subtitle Plus mode) -->
+<!-- conductor-refresh: 2026-09-29 all (73 archived / 0 active Conductor tracks; unchanged. Beads now 7 open / 2 in progress / 526 closed; no active plan.md checkboxes to sync.) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
