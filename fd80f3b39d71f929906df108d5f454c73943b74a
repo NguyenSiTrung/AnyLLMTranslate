@@ -1,0 +1,1 @@
+Conductor full refresh: reviewed commits after 2026-09-28; updated context markers, refresh state, and Beads snapshot; no product, stack, workflow, track, or reusable-pattern drift. JSON validation passed; quality gates carried forward from 2026-09-28 and were not rerun.
