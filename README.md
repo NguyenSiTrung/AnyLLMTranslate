@@ -24,8 +24,9 @@ Translation is BYOK (Bring Your Own Key): AnyLLMTranslate does not provide a hos
 ### Video subtitle translation
 
 - Translate subtitles progressively and display original plus translated cues in the native player or a resilient custom overlay.
+- Opt into full-track quality mode (**Options → Subtitles → Translation mode**) for sources that hand over the complete track: freeze one term list, translate chunks in parallel, and reveal nothing until the whole track is ready. Sources or runs that cannot qualify downgrade to progressive with a visible reason.
 - Discover tracks proactively and use platform-specific interception, manifest/TextTrack access, or DOM cue scraping where needed.
-- Use the in-player mini studio for subtitle activation, language, display mode, position, font size, opacity, style presets, and glossary selection.
+- Use the in-player mini studio for subtitle activation, language, standard or full-track translation mode, display mode, position, font size, opacity, style presets, and glossary selection.
 - Keep subtitle quality consistent with site profiles, register/faithfulness/brevity/profanity controls, named glossaries, reading-speed timing, line wrapping, and speaker-aware context.
 - Optionally re-align fragmented YouTube auto-generated captions locally or with a BYOK model, with saved results cached for reuse.
 
