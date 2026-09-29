@@ -82,7 +82,7 @@
       "AnyLLMTranslate-2wtc (P0) CWS listing/screenshots issue; dashboard work is recorded complete in issue notes, but issue remains in progress",
       "AnyLLMTranslate-3sj Subtitle Plus mode — implementation shipped; manual smoke and follow-ups remain"
     ],
-    "closedInWindow": [],
+    "closedInWindow": ["AnyLLMTranslate-j327 (Relocate the Full-track quality mode toggle to its own Translation mode card)"],
     "closedTotal": 526,
     "syncDirection": "skip",
     "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so no directional plan synchronization applies. Tracker counts updated from bd stats after bd dolt pull; all open and in-progress issue ids are enumerated above. Beads→Conductor sync is not applicable without an active track plan."
