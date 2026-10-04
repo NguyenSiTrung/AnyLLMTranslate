@@ -14,10 +14,11 @@ Translation is BYOK (Bring Your Own Key): AnyLLMTranslate does not provide a hos
 
 ### Bilingual web pages
 
-- Show original and translated text inline with below, above, side-by-side, and translation-only display options.
+- Show original and translated text inline with below, above, or side placement, a translation-only mode, and side-by-side themes.
 - Translate visible content first with viewport-aware loading, batching, streaming, caching, and look-ahead prefetch.
 - Handle single-page applications and dynamic content through mutation watching and lifecycle-safe resume/restore.
 - Choose page-scope presets, smart excludes, site rules, custom glossaries, and context-aware category prompts.
+- Auto-translate matching sites on page load with a per-site Always-translate rule, announced by a dismissible notification bar with an instant opt-out.
 - Personalize the reading experience with visual themes, custom themes, dark mode, compact inline display, and translation-position controls.
 - Pause, retry, hide, or restore translations without losing the surrounding page.
 
@@ -88,7 +89,7 @@ The provider pool supports multiple providers and API keys, round-robin distribu
 
 ## Install for development
 
-> This repository documents unpacked developer builds. It does not claim a Chrome Web Store or Firefox Add-ons release.
+> This repository documents unpacked developer builds. There is no published Chrome Web Store or Firefox Add-ons release yet; submission preparation lives in [docs/PUBLISHING.md](docs/PUBLISHING.md) with listing copy in [docs/store-listing.md](docs/store-listing.md).
 
 ### Prerequisites
 
@@ -185,22 +186,22 @@ The project uses WXT, React, TypeScript, Tailwind CSS, Zustand, IndexedDB, Web C
 
 Run these from the repository root:
 
-| Command              | Purpose                                   |
-| -------------------- | ----------------------------------------- |
-| `pnpm dev`           | Chrome development server with hot reload |
-| `pnpm dev:firefox`   | Firefox development server                |
-| `pnpm build`         | Production Chrome build                   |
-| `pnpm build:firefox` | Production Firefox build                  |
-| `pnpm test:fast`     | Fast library and unit-test subset         |
-| `pnpm test`          | Full Vitest suite                         |
-| `pnpm test:watch`    | Vitest watch mode                         |
-| `pnpm test:coverage` | Generate a coverage report                |
-| `pnpm compile`       | TypeScript type check                     |
-| `pnpm lint`          | ESLint check                              |
-| `pnpm format`        | Format source and Markdown files          |
-| `pnpm zip`           | Chrome distributable package              |
-| `pnpm zip:firefox`   | Firefox distributable package             |
-| `pnpm zip:source`    | Git-tracked source archive                |
+| Command              | Purpose                                      |
+| -------------------- | -------------------------------------------- |
+| `pnpm dev`           | Chrome development server with hot reload    |
+| `pnpm dev:firefox`   | Firefox development server                   |
+| `pnpm build`         | Production Chrome build                      |
+| `pnpm build:firefox` | Production Firefox build                     |
+| `pnpm test:fast`     | Fast library and unit-test subset            |
+| `pnpm test`          | Full Vitest suite                            |
+| `pnpm test:watch`    | Vitest watch mode                            |
+| `pnpm test:coverage` | Generate a coverage report                   |
+| `pnpm compile`       | TypeScript type check                        |
+| `pnpm lint`          | ESLint check                                 |
+| `pnpm format`        | Format source and Markdown files             |
+| `pnpm zip`           | Chrome distributable package                 |
+| `pnpm zip:firefox`   | Firefox distributable package                |
+| `pnpm zip:source`    | Reviewer source archive (curated allow-list) |
 
 A typical contributor check is:
 
@@ -220,6 +221,7 @@ pnpm lint
 | `services/`                        | Background translation, provider pool, cache, statistics, and PDF bridge   |
 | `lib/`, `types/`, `stores/`, `ui/` | Shared logic, contracts, settings state, and reusable React components     |
 | `styles/`                          | Host-page translation themes, subtitle overlay, and tooltip styles         |
+| `tests/`                           | Cross-cutting unit tests (Vitest)                                          |
 
 ## Keyboard shortcuts
 
@@ -248,7 +250,7 @@ Global commands can be changed at `chrome://extensions/shortcuts`. The inline-in
 
 - **No telemetry:** no developer analytics, advertising, crash reporting, or usage tracking. There is no AnyLLMTranslate server; nothing is transmitted to the developer.
 - **Prominent disclosure and consent:** the first-run setup wizard shows every data type the extension handles and where it goes, and requires an explicit acceptance before anything is translated. The same disclosure is reviewable and revocable in Options → Statistics → Data & privacy.
-- **Local storage:** settings, statistics, glossaries, and the translation cache stay in browser storage. API keys are stored encrypted with AES-256-GCM, keyed from the extension's installation identity and a per-install salt in the same browser profile — treat your browser profile as the security boundary.
+- **Local storage:** settings, statistics, glossaries, and the translation cache stay in browser storage, and per-host usage statistics are opt-in and off by default. API keys are stored encrypted with AES-256-GCM, keyed from the extension's installation identity and a per-install salt in the same browser profile — treat your browser profile as the security boundary.
 - **Direct provider requests:** page text, selected text, input text, and subtitle text go only to the LLM endpoint you configure for translation.
 - **Site requests:** to translate subtitles, the extension reads the caption files the page's own player has already loaded, and may re-request them from that site's CDN. Those requests go to the site you are already on and carry no cookies.
 - **Protected credentials:** API keys are never exposed to page content, never written to logs, and never sent anywhere except your configured provider (and your PDF bridge, if you enable it).
