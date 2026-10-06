@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
-<!-- conductor-refresh: 2026-09-29 all (73 archived / 0 active Conductor tracks; unchanged. Beads now 7 open / 2 in progress / 526 closed; no active plan.md checkboxes to sync.) -->
+<!-- conductor-refresh: 2026-10-05 all (73 archived / 0 active Conductor tracks; unchanged since 2026-08-04. Beads is now 0 open / 0 in progress / 535 closed after the 2026-09-29 force-close sweep — most closed without a fix. No active plan.md checkboxes, so no directional sync applies.) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
