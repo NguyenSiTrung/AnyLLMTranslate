@@ -89,17 +89,57 @@ function shouldSkipElement(element: Element, excludeSelectors?: string[]): boole
   return false;
 }
 
-/** Check if an element is a block element that splits pieces */
-function isBlockElement(element: Element): boolean {
-  if (BLOCK_ELEMENTS.has(element.tagName)) return true;
+/** FR-6: computed `display` values that start a new visual block. */
+function isBlockDisplay(display: string): boolean {
+  return !display.includes('inline') && /^(block|flex|grid|list-item|flow-root|table)/.test(display);
+}
 
-  // Account for framework-specific block semantics (e.g., Mintlify, styled-components)
-  const dataAs = element.getAttribute('data-as');
-  if (dataAs && BLOCK_ELEMENTS.has(dataAs.toUpperCase())) {
-    return true;
+/** True when a non-whitespace text node sits directly beside `el`. */
+function isEmbeddedInProse(el: Element): boolean {
+  for (const sibling of [el.previousSibling, el.nextSibling]) {
+    if (sibling?.nodeType === Node.TEXT_NODE && sibling.textContent?.trim()) return true;
   }
-
   return false;
+}
+
+/**
+ * FR-6: tags whose block-ness depends on page CSS — generic `SPAN`, custom
+ * elements (`x-card`) and unknown tags. Standard tags never read style.
+ */
+function isAmbiguousTag(el: Element): boolean {
+  return (
+    el.tagName === 'SPAN' ||
+    el.tagName.includes('-') ||
+    (typeof HTMLUnknownElement !== 'undefined' && el instanceof HTMLUnknownElement)
+  );
+}
+
+/**
+ * Build a block classifier for one walk. Known block tags and `data-as`
+ * aliases split pieces; ambiguous tags split when their computed display is
+ * block-level (FR-6), and custom elements also split when they are not
+ * embedded in running text (jsdom and unstyled hosts report `inline`).
+ * Computed style is read at most once per element per walk.
+ */
+function createBlockClassifier(): (element: Element) => boolean {
+  const cache = new Map<Element, boolean>();
+  return (element) => {
+    if (BLOCK_ELEMENTS.has(element.tagName)) return true;
+
+    // Account for framework-specific block semantics (e.g., Mintlify, styled-components)
+    const dataAs = element.getAttribute('data-as');
+    if (dataAs && BLOCK_ELEMENTS.has(dataAs.toUpperCase())) return true;
+
+    if (!isAmbiguousTag(element)) return false;
+    const cached = cache.get(element);
+    if (cached !== undefined) return cached;
+    const view = element.ownerDocument.defaultView;
+    const display = view ? view.getComputedStyle(element).display : '';
+    const block =
+      isBlockDisplay(display) || (element.tagName.includes('-') && !isEmbeddedInProse(element));
+    cache.set(element, block);
+    return block;
+  };
 }
 
 /** Rich placeholder tokens (`<z id="N">` / `</z>`) — never cut inside one. */
@@ -221,6 +261,7 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
   }
 
   const pieces: TranslationPiece[] = [];
+  const isBlockElement = createBlockClassifier();
   let currentTextNodes: Text[] = [];
   let currentParent: Element | null = null;
   // FR-5: per-region cumulative char tracker for aside caps. A caller-provided
@@ -263,7 +304,8 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
 
     // Walk up from inline elements to ensure anchor is a suitable container for hiding
     // This fixes translation-only mode where we'd otherwise hide just a link/span
-    while (anchorElement && INLINE_ELEMENTS.has(anchorElement.tagName)) {
+    // FR-6: stop at an inline tag the page renders as a block (span display:block).
+    while (anchorElement && INLINE_ELEMENTS.has(anchorElement.tagName) && !isBlockElement(anchorElement)) {
       anchorElement = anchorElement.parentElement;
     }
     // Ensure we have a valid anchor after walking up

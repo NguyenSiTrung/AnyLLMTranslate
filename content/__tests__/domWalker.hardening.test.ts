@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { extractPieces, resetPieceCounter, splitAtSentenceBoundary } from '../domWalker';
 import { joinGroupText } from '../pieceText';
 import { __resetMatchCacheForTest } from '@/lib/domUtils';
@@ -172,6 +172,41 @@ describe('domWalker — CJK-aware, tag-safe sentence splitting (FR-5)', () => {
       expect(zBalance(piece.text)).toBe(0);
       const frag = decodeInlineHtml(piece.text, piece.variables ?? []);
       expect(frag.textContent).not.toMatch(/<\/?z/);
+    }
+  });
+});
+
+describe('domWalker — visually-block custom elements split pieces (FR-6)', () => {
+  it('splits structural custom elements and display:block spans into separate pieces', () => {
+    setBody('<div><x-card>First card text</x-card><x-card>Second card text</x-card></div>');
+    let pieces = extractPieces(document.body);
+    expect(pieces.map((p) => p.text)).toEqual(['First card text', 'Second card text']);
+    expect(pieces.map((p) => p.parentElement.tagName)).toEqual(['X-CARD', 'X-CARD']);
+
+    setBody('<div><span style="display:block">First line</span><span style="display:flex">Second line</span></div>');
+    pieces = extractPieces(document.body);
+    expect(pieces.map((p) => p.text)).toEqual(['First line', 'Second line']);
+    expect(pieces.map((p) => p.parentElement.tagName)).toEqual(['SPAN', 'SPAN']);
+  });
+
+  it('keeps inline custom elements and inline-block spans inside the sentence', () => {
+    setBody('<p>Updated <relative-time>3 days ago</relative-time> by <span style="display:inline-block">bot</span>.</p>');
+    const pieces = extractPieces(document.body);
+    expect(pieces.map((p) => p.text)).toEqual(['Updated 3 days ago by bot.']);
+  });
+
+  it('never reads computed style for standard tags and reads it once per ambiguous element', () => {
+    const spy = vi.spyOn(window, 'getComputedStyle');
+    try {
+      setBody('<p>A <a href="#">b</a> <strong>c</strong> <em>d</em> <code>e</code> <b>f</b></p><div><p>g h</p></div>');
+      extractPieces(document.body);
+      expect(spy).not.toHaveBeenCalled();
+
+      setBody('<p>One <span>two <b>three</b> four</span> five <span>six</span></p>');
+      extractPieces(document.body);
+      expect(spy).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
     }
   });
 });

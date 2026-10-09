@@ -60,3 +60,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: never call `.test()` on a shared `/g` regex — `lastIndex` persists between calls, so the second call can return false. Use `matchAll`/`replace` (stateless) or `includes`.
   - Patterns: a split link becomes two `<a>` elements with the same attributes — acceptable, and each part decodes independently.
 ---
+
+## [2026-10-09] - Phase 1 Task 1.6: Visually-block custom elements split pieces (FR-6)
+- **Implemented:** `createBlockClassifier()` per `extractPieces` call. Known block tags / `data-as` as before; ambiguous tags (`SPAN`, custom `x-*`, `HTMLUnknownElement`) read computed `display` once (Map cache) and split when block-level (`block|flex|grid|list-item|flow-root|table*`, never `inline-*`). Custom elements also split when not embedded in running text (no non-whitespace text sibling). Anchor walk-up stops at a block-rendered inline tag.
+- **Files changed:** content/domWalker.ts, content/__tests__/domWalker.hardening.test.ts
+- **Learnings:**
+  - Context: jsdom does implement `getComputedStyle().display` (div→block, span/custom→inline, inline `style` honored), so FR-6 is unit-testable; spy on `window.getComputedStyle` and call it via `ownerDocument.defaultView`.
+  - Gotchas: custom elements default to `display:inline` in browsers and jsdom; a pure computed-style rule would never split unstyled `<x-card>`s, while an unconditional rule splits GitHub's inline `<relative-time>` out of its sentence — hence the prose-adjacency tie-breaker.
+---

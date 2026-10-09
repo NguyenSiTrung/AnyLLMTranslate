@@ -24,9 +24,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 1.5: CJK-aware, tag-safe splitting (FR-5)
   - [x] Test: long Chinese paragraph splits only at `。！？；`; rich piece >1000 chars never cuts inside `<z id="N">`/`</z>` and each part has balanced tags
   - [x] Implement in `splitAtSentenceBoundary` (`domWalker.ts:106`)
-- [ ] Task 1.6: Visually-block custom elements split pieces (FR-6)
-  - [ ] Test: two sibling `<x-card>` elements with text under one `<div>` become two pieces; `span` with computed `display:block` splits; standard inline tags never call `getComputedStyle`
-  - [ ] Implement `isBlockElement` fallback with per-walk cache
+- [x] Task 1.6: Visually-block custom elements split pieces (FR-6)
+  - [x] Test: two sibling `<x-card>` elements with text under one `<div>` become two pieces; `span` with computed `display:block` splits; standard inline tags never call `getComputedStyle`
+  - [x] Implement `isBlockElement` fallback with per-walk cache
 - [ ] Task: Automated phase gate 'Phase 1: Extraction correctness' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
 
 ## Phase 2: Display safety
