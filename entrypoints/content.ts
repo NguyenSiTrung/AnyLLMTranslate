@@ -385,11 +385,26 @@ const piecesById = new Map<string, TranslationPiece>();
 /** parentElement → (text → piece) for identity-based dedup without O(N×M) scans. */
 const piecesByParentText = new WeakMap<Element, Map<string, TranslationPiece>>();
 
+/** FR-14: parent element → registered pieces, so a mutation flush walks up
+ *  from each delivered element instead of scanning every piece. */
+let piecesByParent = new WeakMap<Element, Set<TranslationPiece>>();
+/** FR-14: source text node → registered piece (merge subsumption lookup). */
+let pieceByTextNode = new WeakMap<Text, TranslationPiece>();
+
 function registerPiece(piece: TranslationPiece): void {
   // A recycled id (fresh extraction after a counter reset) must not inherit
   // an earlier invalidation mark.
   invalidatedPieceIds.delete(piece.id);
   piecesById.set(piece.id, piece);
+  let siblings = piecesByParent.get(piece.parentElement);
+  if (!siblings) {
+    siblings = new Set();
+    piecesByParent.set(piece.parentElement, siblings);
+  }
+  siblings.add(piece);
+  for (const node of piece.textNodes) {
+    pieceByTextNode.set(node, piece);
+  }
   let byText = piecesByParentText.get(piece.parentElement);
   if (!byText) {
     byText = new Map();
@@ -400,6 +415,14 @@ function registerPiece(piece: TranslationPiece): void {
 
 function unregisterPiece(piece: TranslationPiece): void {
   piecesById.delete(piece.id);
+  const siblings = piecesByParent.get(piece.parentElement);
+  if (siblings) {
+    siblings.delete(piece);
+    if (siblings.size === 0) piecesByParent.delete(piece.parentElement);
+  }
+  for (const node of piece.textNodes) {
+    if (pieceByTextNode.get(node) === piece) pieceByTextNode.delete(node);
+  }
   const byText = piecesByParentText.get(piece.parentElement);
   if (byText) {
     byText.delete(piece.text);
@@ -408,6 +431,8 @@ function unregisterPiece(piece: TranslationPiece): void {
 
 function replaceAllPieces(next: TranslationPiece[]): void {
   piecesById.clear();
+  piecesByParent = new WeakMap();
+  pieceByTextNode = new WeakMap();
   // WeakMap entries drop with GC when parents detach; rebuild from next list.
   allPieces = next;
   for (const piece of next) {
@@ -1543,21 +1568,30 @@ async function startTranslationUnlocked(): Promise<void> {
       for (const el of addedElements) {
         if (isMarkedHost(el)) forcedRoots.add(el);
       }
-      for (const piece of [...allPieces]) {
+      // FR-14: affected pieces come from the parent index — the delivered
+      // element and its ancestors (parent.contains(el)) plus indexed parents
+      // inside it (el.contains(parent)) — never a pieces × elements scan.
+      // Value: whether a marked host was among the delivering elements.
+      const affected = new Map<TranslationPiece, boolean>();
+      const noteParent = (parent: Element, marked: boolean) => {
+        const pieces = piecesByParent.get(parent);
+        if (!pieces) return;
+        for (const piece of pieces) {
+          affected.set(piece, affected.get(piece) === true || marked);
+        }
+      };
+      for (const el of addedElements) {
+        const marked = isMarkedHost(el);
+        for (let node: Element | null = el; node; node = node.parentElement) {
+          noteParent(node, marked);
+        }
+        for (const descendant of el.querySelectorAll('*')) {
+          noteParent(descendant, marked);
+        }
+      }
+      for (const [piece, markedHostDelivered] of affected) {
         const parent = piece.parentElement;
         if (!parent.isConnected) continue;
-        let affected = false;
-        let markedHostDelivered = false;
-        for (const el of addedElements) {
-          if (!(el === parent || parent.contains(el) || el.contains(parent))) {
-            continue;
-          }
-          affected = true;
-          if (isMarkedHost(el)) {
-            markedHostDelivered = true;
-          }
-        }
-        if (!affected) continue;
         // A marked original/source host was delivered: queue the parent for
         // forced re-extraction even when this piece's group is unchanged —
         // appended site text must still surface as new work while unchanged
@@ -1603,18 +1637,16 @@ async function startTranslationUnlocked(): Promise<void> {
       // (e.g. a site appended a text node to a marked paragraph). The new
       // piece subsumes the old group; retire the old piece so its output
       // does not overlap the merged translation or accumulate on repeats.
-      if (newPieces.length > 0) {
-        const newNodeSets = newPieces.map((piece) => new Set(piece.textNodes));
-        for (const stale of [...allPieces]) {
-          const subsumed = newPieces.some(
-            (piece, i) =>
-              piece !== stale &&
-              stale.textNodes.some((node) => newNodeSets[i]!.has(node)),
-          );
-          if (subsumed) {
-            retirePiece(stale);
-          }
+      // FR-14: found through the textNode→piece index.
+      const subsumed = new Set<TranslationPiece>();
+      for (const piece of newPieces) {
+        for (const node of piece.textNodes) {
+          const owner = pieceByTextNode.get(node);
+          if (owner && owner !== piece) subsumed.add(owner);
         }
+      }
+      for (const stale of subsumed) {
+        retirePiece(stale);
       }
 
       if (newPieces.length === 0) {

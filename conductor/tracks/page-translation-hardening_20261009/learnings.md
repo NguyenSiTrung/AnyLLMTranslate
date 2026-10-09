@@ -142,3 +142,12 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: a block translation is inserted AFTER its original, so a site that removes the original leaves the translation connected — pruning must remove artifacts, not just forget the piece.
   - Patterns: `findPieceElement` already self-heals the id→element map for detached elements; the leak was in observer `pieceMap` (IntersectionObserver kept detached targets alive).
 ---
+
+## [2026-10-09] - Phase 4 Task 2: Indexed mutation flush (FR-14)
+- **Implemented:** `piecesByParent` (WeakMap<Element, Set<piece>>) and `pieceByTextNode` (WeakMap<Text, piece>) maintained by register/unregister and reset in `replaceAllPieces`. The flush walks up from each delivered element and scans its subtree for indexed parents; subsumption goes through the text-node index. 5,000 pieces × 50 added: 510,000 → <1,020 `Node.contains` calls.
+- **Files changed:** entrypoints/content.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Gotchas: `replaceAllPieces(next)` adopts the caller's array and `retirePiece` splices it — tests must capture a piece before triggering a retire, not index the original array afterwards.
+  - Patterns: the descendant direction (`el.contains(parent)`) is an index probe over `el.querySelectorAll('*')` — O(subtree), same shadow-boundary semantics as `contains`.
+  - Context: lint baseline is now 37 (the removed subsumption loop carried a non-null assertion).
+---

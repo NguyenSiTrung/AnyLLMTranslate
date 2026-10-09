@@ -68,9 +68,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 4.1: Release detached pieces fully (FR-13)
   - [x] Test: 1,000 detach/append cycles keep `observedCount` and the display tracking map bounded
   - [x] Add `ViewportObserver.unobserve(piece)`; call it plus `untrackPieceElement`/`removePieceArtifacts` from `pruneDetachedPieces`
-- [ ] Task 4.2: Indexed mutation flush (FR-14)
-  - [ ] Test: 5,000 pieces + 50 added elements — `contains` call count is O(added × depth) (counter/spy); existing sm7n invalidation tests still pass
-  - [ ] Add parent→pieces and textNode→piece indexes maintained by `registerPiece`/`unregisterPiece`
+- [x] Task 4.2: Indexed mutation flush (FR-14)
+  - [x] Test: 5,000 pieces + 50 added elements — `contains` call count is O(added × depth) (counter/spy); existing sm7n invalidation tests still pass
+  - [x] Add parent→pieces and textNode→piece indexes maintained by `registerPiece`/`unregisterPiece`
 - [ ] Task 4.3: Throttled, layout-free status (FR-15)
   - [ ] Test: 20 rapid status triggers → ≤2 broadcasts; no `getBoundingClientRect` calls on status computation
   - [ ] Track visible parents from IntersectionObserver entries; throttle `sendStatusUpdate`; reuse for look-ahead

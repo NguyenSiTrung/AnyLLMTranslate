@@ -1139,6 +1139,59 @@ describe('webTranslateLifecycle', () => {
       });
     });
 
+    describe('FR-14: indexed mutation flush', () => {
+      it('5,000 pieces + 50 added elements: Node.contains calls scale with added × depth, not pieces × added', async () => {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const { MutationWatcher } = await import('@/content/mutationWatcher');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [],
+          enableWebResume: false,
+        }));
+        document.body.innerHTML = '<main></main>';
+        const main = document.querySelector('main')!;
+        const pieces = Array.from({ length: 5000 }, (_, i) => {
+          const p = document.createElement('p');
+          p.textContent = `Paragraph ${i}`;
+          main.appendChild(p);
+          return {
+            id: `big-${i}`, text: `Paragraph ${i}`, sourceText: `Paragraph ${i}`, parentElement: p,
+            textNodes: [p.firstChild as Text], isTranslated: false, inArticleContext: false,
+          };
+        });
+        vi.mocked(extractPieces).mockReturnValueOnce(pieces as never).mockReturnValue([]);
+        await testHooks.startTranslation();
+        expect(testHooks.getPieceCount()).toBe(5000);
+        const onMutation = (vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[])[0] as (
+          added: Element[],
+        ) => void;
+
+        const added = Array.from({ length: 50 }, (_, i) => {
+          const div = document.createElement('div');
+          div.innerHTML = `<section><span>New ${i}</span></section>`;
+          main.appendChild(div);
+          return div;
+        });
+        // One edited piece among them still invalidates exactly once. (Capture
+        // it: the session adopts the array, so retiring splices `pieces`.)
+        const edited = pieces[42];
+        edited.parentElement.textContent = 'Paragraph 42 (edited)';
+        const containsSpy = vi.spyOn(Node.prototype, 'contains');
+        try {
+          onMutation([...added, edited.parentElement]);
+          expect(containsSpy.mock.calls.length).toBeLessThan(51 * 20);
+        } finally {
+          containsSpy.mockRestore();
+        }
+        expect(vi.mocked(display.removePieceArtifacts).mock.calls).toEqual([['big-42', edited.parentElement]]);
+        expect(testHooks.getPieceCount()).toBe(4999);
+      });
+    });
+
     it('bedw: marked back-fill shows incomplete error; a genuine source echo still applies', async () => {
       // Regression: back-fill detection must use the explicit `backfilled`
       // marker, not `partial && translatedText === piece.text` — the latter
