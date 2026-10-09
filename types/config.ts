@@ -944,6 +944,9 @@ export const SMART_EXCLUDE_SELECTORS = [
   // Common UI patterns
   '[aria-label="breadcrumb"]',
   '.table-of-contents',
+  // Code blocks (FR-4): translating source code corrupts it. Inline <code>
+  // stays in its sentence — the walker only hard-skips non-inline matches.
+  'pre', '.CodeMirror', '.cm-editor', '.monaco-editor',
 ];
 
 /** Default settings */

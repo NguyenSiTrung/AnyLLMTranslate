@@ -3,6 +3,7 @@ import { extractPieces, resetPieceCounter } from '../domWalker';
 import { joinGroupText } from '../pieceText';
 import { __resetMatchCacheForTest } from '@/lib/domUtils';
 import { decodeInlineHtml } from '@/lib/richTranslate';
+import { DEFAULT_SETTINGS, SMART_EXCLUDE_SELECTORS } from '@/types/config';
 
 function setBody(html: string): void {
   document.body.innerHTML = html;
@@ -100,5 +101,18 @@ describe('domWalker — decoded entities and void tags in rich text (FR-2)', () 
     const a = decodeInlineHtml(piece.text, piece.variables ?? []).querySelector('a');
     expect(a?.getAttribute('href')).toBe('/q?a=1&b=2');
     expect(a?.getAttribute('title')).toBe('say "hi" & wave');
+  });
+});
+
+describe('domWalker — code blocks skipped by default smart excludes (FR-4)', () => {
+  it('drops <pre> and editor code blocks but keeps inline code in its sentence', () => {
+    expect(DEFAULT_SETTINGS.enableSmartExcludes).toBe(true);
+    setBody(
+      '<article><p>Run <code>npm test</code> before pushing.</p>' +
+        '<pre><code>const answer = 42;\nconsole.log(answer);</code></pre>' +
+        '<div class="cm-editor"><div class="cm-line">let editorCode = 1;</div></div></article>',
+    );
+    const pieces = extractPieces(document.body, { excludeSelectors: [...SMART_EXCLUDE_SELECTORS] });
+    expect(pieces.map((p) => p.text)).toEqual(['Run npm test before pushing.']);
   });
 });

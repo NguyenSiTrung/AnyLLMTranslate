@@ -45,3 +45,10 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Gotchas: decode attribute entities BEFORE the `isSafeUrl` check — `&#106;avascript:` must be judged as `javascript:`.
 ---
+
+## [2026-10-09] - Phase 1 Task 1.4: Skip code blocks by default (FR-4)
+- **Implemented:** `pre`, `.CodeMirror`, `.cm-editor`, `.monaco-editor` added to `SMART_EXCLUDE_SELECTORS` (types/config.ts). `enableSmartExcludes` defaults on, so code blocks are skipped without a site rule; inline `code` stays soft-preserved because the walker only hard-skips non-inline matches.
+- **Files changed:** types/config.ts, content/__tests__/domWalker.hardening.test.ts
+- **Learnings:**
+  - Context: smart excludes are merged in `translatePage` (`entrypoints/content.ts`), so a walker test with `excludeSelectors: [...SMART_EXCLUDE_SELECTORS]` is the faithful default-settings check. Avoided `.highlight` — some sites use it on prose.
+---
