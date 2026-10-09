@@ -166,3 +166,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Gotchas: the Phase 3 gate note's "829/829" counted 12 passing scratch tests; tracked was 817 then. Count tracked tests with `vitest run --exclude '.review-scratch/**'`, not total minus failures.
 ---
+
+## [2026-10-09] - Phase 5 Task 1: bfcache-safe teardown (FR-16)
+- **Implemented:** `content/pageLifecycle.ts` `installPageLifecycle(window, {teardown, restore})`: teardown on `pagehide` (once), restore on a persisted `pageshow` after a teardown. `main()` uses it: teardown flushes LRU, cancels the subtitle session, runs `teardownInteractionFeatures()` and stops the sentinel; restore restarts the coordinator, player chrome, inline translate, interaction features and the sentinel. `_beforeUnloadCleanup` renamed `_pageLifecycleCleanup`.
+- **Files changed:** content/pageLifecycle.ts, content/__tests__/pageLifecycle.test.ts, entrypoints/content.ts
+- **Learnings:**
+  - Gotchas: `main()` never runs under test (`defineContentScript` is mocked), so lifecycle wiring needs its own module to be testable.
+  - Patterns: jsdom has no PageTransitionEvent constructor guarantee — `Object.assign(new Event('pagehide'), { persisted })` drives the handler.
+---

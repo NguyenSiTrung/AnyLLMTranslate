@@ -8,6 +8,7 @@ import type { TranslationPiece } from '@/types/translation';
 import type { PageContext } from '@/types/config';
 import { extractPieces, type ExtractOptions } from '@/content/domWalker';
 import { joinGroupText } from '@/content/pieceText';
+import { installPageLifecycle } from '@/content/pageLifecycle';
 import { ChurnGuard } from '@/content/churnGuard';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
@@ -143,7 +144,7 @@ let allPieces: TranslationPiece[] = [];
 let currentTargetLanguage = 'vi';
 let coordinatorCleanup: (() => void) | null = null;
 let playerChromeCleanup: (() => void) | null = null;
-let _beforeUnloadCleanup: (() => void) | null = null;
+let _pageLifecycleCleanup: (() => void) | null = null;
 let activeRequests = 0;
 /**
  * Piece ids currently being translated. Prevents concurrent batches (viewport
@@ -1729,6 +1730,40 @@ export async function toggleTranslation(): Promise<void> {
 }
 
 /** Initialize interaction features based on settings */
+/** Release subtitle, player-chrome and interaction-feature listeners (FR-16 pagehide). */
+function teardownInteractionFeatures(): void {
+  if (coordinatorCleanup) {
+    coordinatorCleanup();
+    coordinatorCleanup = null;
+  }
+  if (playerChromeCleanup) {
+    playerChromeCleanup();
+    playerChromeCleanup = null;
+  }
+  if (_textSelectionCleanup) {
+    _textSelectionCleanup();
+    _textSelectionCleanup = null;
+  }
+  if (_hoverTranslateCleanup) {
+    _hoverTranslateCleanup();
+    _hoverTranslateCleanup = null;
+  }
+  if (_keyboardShortcutsCleanup) {
+    _keyboardShortcutsCleanup();
+    _keyboardShortcutsCleanup = null;
+  }
+  if (_inlineTranslateCleanup) {
+    _inlineTranslateCleanup();
+    _inlineTranslateCleanup = null;
+  }
+  if (_storageChangeListener) {
+    try {
+      chrome.storage.onChanged.removeListener(_storageChangeListener);
+    } catch { /* noop */ }
+    _storageChangeListener = null;
+  }
+}
+
 async function initInteractionFeatures(): Promise<void> {
   const settings = await loadSettings();
 
@@ -1928,9 +1963,9 @@ function destroyZombie(): void {
     try { playerChromeCleanup(); } catch { /* noop */ }
     playerChromeCleanup = null;
   }
-  if (_beforeUnloadCleanup) {
-    try { _beforeUnloadCleanup(); } catch { /* noop */ }
-    _beforeUnloadCleanup = null;
+  if (_pageLifecycleCleanup) {
+    try { _pageLifecycleCleanup(); } catch { /* noop */ }
+    _pageLifecycleCleanup = null;
   }
   if (_textSelectionCleanup) {
     try { _textSelectionCleanup(); } catch { /* noop */ }
@@ -2050,56 +2085,41 @@ export default defineContentScript({
     }
 
     // Sentinel check for context invalidation (e.g. reload or update)
-    const sentinelInterval = setInterval(() => {
-      if (isContextInvalidated()) {
-        clearInterval(sentinelInterval);
-        destroyZombie();
-      }
-    }, 1000);
-
-    // Flush pending cache LRU updates on page unload
-    const beforeUnloadListener = () => {
-      try {
-        flushLruUpdates().catch(() => {});
-        chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
-        chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
-      } catch { /* ignore since context might be invalidated */ }
-      if (coordinatorCleanup) {
-        coordinatorCleanup();
-        coordinatorCleanup = null;
-      }
-      if (playerChromeCleanup) {
-        playerChromeCleanup();
-        playerChromeCleanup = null;
-      }
-      if (_textSelectionCleanup) {
-        _textSelectionCleanup();
-        _textSelectionCleanup = null;
-      }
-      if (_hoverTranslateCleanup) {
-        _hoverTranslateCleanup();
-        _hoverTranslateCleanup = null;
-      }
-      if (_keyboardShortcutsCleanup) {
-        _keyboardShortcutsCleanup();
-        _keyboardShortcutsCleanup = null;
-      }
-      if (_inlineTranslateCleanup) {
-        _inlineTranslateCleanup();
-        _inlineTranslateCleanup = null;
-      }
-      if (_storageChangeListener) {
-        try {
-          chrome.storage.onChanged.removeListener(_storageChangeListener);
-        } catch { /* noop */ }
-        _storageChangeListener = null;
-      }
-      clearInterval(sentinelInterval);
+    const startSentinel = () => {
+      const interval = setInterval(() => {
+        if (isContextInvalidated()) {
+          clearInterval(interval);
+          destroyZombie();
+        }
+      }, 1000);
+      return interval;
     };
+    let sentinelInterval = startSentinel();
 
-    window.addEventListener('beforeunload', beforeUnloadListener);
-    _beforeUnloadCleanup = () => {
-      window.removeEventListener('beforeunload', beforeUnloadListener);
+    // FR-16: tear down on pagehide (a cancelled "Leave site?" dialog fires
+    // beforeunload only) and re-initialize when bfcache restores the page.
+    const removePageLifecycle = installPageLifecycle(window, {
+      teardown: () => {
+        try {
+          flushLruUpdates().catch(() => {});
+          chrome.runtime.sendMessage({ action: 'FLUSH_LRU' }).catch(() => {});
+          chrome.runtime.sendMessage({ action: 'CANCEL_SUBTITLE_SESSION' }).catch(() => {});
+        } catch { /* ignore since context might be invalidated */ }
+        teardownInteractionFeatures();
+        clearInterval(sentinelInterval);
+      },
+      restore: () => {
+        if (isContextInvalidated()) return;
+        coordinatorCleanup = startCoordinator();
+        playerChromeCleanup = startPlayerChrome();
+        _inlineTranslateCleanup = initInlineTranslate();
+        setInlineTranslateEnabled(false);
+        void initInteractionFeatures();
+        sentinelInterval = startSentinel();
+      },
+    });
+    _pageLifecycleCleanup = () => {
+      removePageLifecycle();
       clearInterval(sentinelInterval);
     };
 
