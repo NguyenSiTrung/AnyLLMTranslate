@@ -641,7 +641,7 @@ function applyPieceError(
     handledContentKeys.delete(contentKeyForPiece(piece));
     viewportObserver?.release(piece.id);
     clearSystemicPause();
-    void translatePieces([piece], { skipFailureCache: true });
+    void translatePieces([piece], { skipFailureCache: true, userRetry: true });
   };
   if (shouldUseInlineDisplay(piece, compactInlineEnabled)) {
     setInlineErrorState(piece.parentElement, piece.id, errorMessage, retryPiece);
@@ -651,31 +651,41 @@ function applyPieceError(
 }
 
 /** Send translation request to background and apply results.
- *  When `options.skipFailureCache` is set (user-initiated retry), the background
+ *  When `options.skipFailureCache` is set (any retry), the background
  *  bypasses the FR-4 negative cache so the retry actually re-calls the LLM.
+ *  Only `userRetry` (error chip / banner) clears the provider-failure pause
+ *  and may dispatch while paused (FR-9).
  *  `autoRetriedOnce` is set after a silent one-shot retry for transient failures
  *  so we don't loop forever when the pool is truly down. */
 async function translatePieces(
   pieces: TranslationPiece[],
   options: {
     skipFailureCache?: boolean;
+    /** User-initiated retry: clears the pause before dispatching. */
+    userRetry?: boolean;
     autoRetriedOnce?: boolean;
     /** Look-ahead flush — do not chain further prefetch. */
     isLookahead?: boolean;
   } = {},
 ): Promise<void> {
   if (pieces.length === 0) return;
-  const { skipFailureCache = false, autoRetriedOnce = false, isLookahead = false } = options;
+  const {
+    skipFailureCache = false,
+    userRetry = false,
+    autoRetriedOnce = false,
+    isLookahead = false,
+  } = options;
 
   // User retry clears the scroll-pause so further content can translate again.
-  if (skipFailureCache) {
+  if (userRetry) {
     clearSystemicPause();
   }
 
   // While the provider pool is exhausted, do not issue more LLM calls as the
   // user scrolls — that only multiplies identical failures. Pieces stay
-  // unobserved-until-resume via ViewportObserver.setPaused.
-  if (systemicPause && !skipFailureCache) {
+  // unobserved-until-resume via ViewportObserver.setPaused. FR-9: automatic
+  // retries are not exempt.
+  if (systemicPause && !userRetry) {
     return;
   }
 
@@ -697,7 +707,7 @@ async function translatePieces(
   translationSession = requestSession;
 
   // FR-4: while resume restore is applying snapshot, do not dispatch LLM work.
-  if (resumeRestorePending && !skipFailureCache) {
+  if (resumeRestorePending && !userRetry) {
     for (const piece of workPieces) {
       inFlightPieceIds.delete(piece.id);
     }
@@ -706,6 +716,8 @@ async function translatePieces(
 
   /** Pieces to silently re-attempt once after this call fully cleans up. */
   let pendingAutoRetry: TranslationPiece[] | null = null;
+  /** The failure each auto-retry piece shows if the retry cannot run (FR-9). */
+  const autoRetryErrors = new Map<string, string>();
   let requestIncremented = false;
   let compactInlineEnabled = false;
 
@@ -964,6 +976,7 @@ async function translatePieces(
           const piece = workPieces.find((p) => p.id === failure.id);
           if (!piece || piece.isTranslated || !isPieceCurrent(piece)) continue;
           failedPieces.push(piece);
+          autoRetryErrors.set(piece.id, failure.error);
           if (isRetryableWebTranslationError(failure.error)) {
             anyRetryable = true;
           }
@@ -986,6 +999,7 @@ async function translatePieces(
       // concurrent success-cache fill or brief blip doesn't force a manual click.
       if (!autoRetriedOnce && isRetryableWebTranslationError(response.error)) {
         pendingAutoRetry = workPieces.filter((p) => !p.isTranslated && isPieceCurrent(p));
+        for (const piece of pendingAutoRetry) autoRetryErrors.set(piece.id, response.error);
       } else {
         showTranslationErrorNotification(response.error);
         for (const piece of workPieces) {
@@ -1004,6 +1018,7 @@ async function translatePieces(
     const message = err instanceof Error ? err.message : 'Unknown error';
     if (!autoRetriedOnce && isRetryableWebTranslationError(message)) {
       pendingAutoRetry = workPieces.filter((p) => !p.isTranslated && isPieceCurrent(p));
+      for (const piece of pendingAutoRetry) autoRetryErrors.set(piece.id, message);
     } else {
       showTranslationErrorNotification(message);
       for (const piece of workPieces) {
@@ -1027,6 +1042,18 @@ async function translatePieces(
   }
 
   if (
+    pendingAutoRetry &&
+    pendingAutoRetry.length > 0 &&
+    sessionRegistry.isCurrent(requestSession) &&
+    systemicPause
+  ) {
+    // FR-9: another batch paused the pool meanwhile. Skip the automatic retry
+    // and leave each piece retryable by hand rather than a stuck spinner.
+    for (const piece of pendingAutoRetry) {
+      if (piece.isTranslated || !isPieceCurrent(piece)) continue;
+      applyPieceError(piece, autoRetryErrors.get(piece.id) ?? 'Translation paused', compactInlineEnabled);
+    }
+  } else if (
     pendingAutoRetry &&
     pendingAutoRetry.length > 0 &&
     sessionRegistry.isCurrent(requestSession)
@@ -1875,6 +1902,7 @@ export const __contentTranslationTestHooks = {
   translatePieces,
   startTranslation,
   getActiveRequests: () => activeRequests,
+  isSystemicPaused: () => systemicPause,
   stopTranslationAsync,
   destroyZombie,
 };

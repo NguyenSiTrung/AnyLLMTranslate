@@ -104,3 +104,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: `vi.doMock` factory spies in webTranslateLifecycle's FR-1b block survive `vi.resetModules()` across tests — `mockClear()` notification/display spies before counting calls.
   - Patterns: auth/quota check runs first in the retry classifier so a pool-exhaustion wrapper ("All providers failed: 401") pauses instead of retrying.
 ---
+
+## [2026-10-09] - Phase 3 Task 2: Automatic retry never clears the pause (FR-9)
+- **Implemented:** `translatePieces` gains `userRetry` (error chip); only it clears/bypasses `systemicPause` and the resume-restore guard. `skipFailureCache` now only means "bypass the negative cache". An auto retry pending when another batch paused is skipped and its pieces get retryable error chips (per-piece error kept in `autoRetryErrors`).
+- **Files changed:** entrypoints/content.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Gotchas: overloaded flags — `skipFailureCache` doubled as "user intent", so the silent auto retry cleared the banner and re-observed everything. Name intent separately from transport options.
+  - Patterns: concurrency tests use per-id deferred `sendMessage` promises; a re-dispatch should resolve immediately so a regression fails on an assertion, not a 5 s timeout.
+---

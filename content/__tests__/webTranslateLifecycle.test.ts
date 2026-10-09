@@ -897,6 +897,84 @@ describe('webTranslateLifecycle', () => {
       );
     });
 
+    describe('FR-9: automatic retries never clear the provider pause', () => {
+      it('batch B auto-retry after batch A paused: pause and banner remain, no dispatch', async () => {
+        const display = await import('@/content/translationDisplay');
+        const notify = await import('@/content/autoTranslateNotification');
+        vi.mocked(notify.showSystemicPauseBanner).mockClear();
+        vi.mocked(notify.hideSystemicPauseBanner).mockClear();
+        vi.mocked(display.setErrorState).mockClear();
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...defaultSettings(),
+          enableStreamingTranslation: false,
+        }));
+
+        const pending = new Map<string, (r: unknown) => void>();
+        const chrome = (globalThis as any).chrome;
+        chrome.runtime.sendMessage.mockImplementation((msg: any) => {
+          if (msg?.action !== 'translate') return Promise.resolve({});
+          const id = msg.pieces[0].id as string;
+          // A re-dispatch (the bug) answers at once instead of hanging the test.
+          if (pending.has(id)) return Promise.resolve({ success: false, error: '503 Service Unavailable' });
+          return new Promise((resolve) => pending.set(id, resolve));
+        });
+
+        const a = makePiece('a', 'Alpha text');
+        const b = makePiece('b', 'Beta text');
+        const runB = testHooks.translatePieces([b]);
+        const runA = testHooks.translatePieces([a]);
+        await vi.waitFor(() => expect(pending.size).toBe(2));
+
+        pending.get('a')!({ success: false, error: '401 Unauthorized' });
+        await runA;
+        expect(testHooks.isSystemicPaused()).toBe(true);
+
+        pending.get('b')!({ success: false, error: '503 Service Unavailable' });
+        await runB;
+
+        const translateCalls = chrome.runtime.sendMessage.mock.calls.filter(
+          ([msg]: any[]) => msg?.action === 'translate',
+        );
+        expect(translateCalls).toHaveLength(2);
+        expect(testHooks.isSystemicPaused()).toBe(true);
+        expect(notify.hideSystemicPauseBanner).not.toHaveBeenCalled();
+        // B is left retryable by hand instead of a stuck spinner.
+        expect(display.setErrorState).toHaveBeenCalledWith(
+          b.parentElement, 'b', '503 Service Unavailable', expect.any(Function),
+        );
+        expect(b.isTranslated).toBe(false);
+      });
+
+      it('a user retry (error chip) still clears the pause and dispatches', async () => {
+        const display = await import('@/content/translationDisplay');
+        const notify = await import('@/content/autoTranslateNotification');
+        vi.mocked(notify.hideSystemicPauseBanner).mockClear();
+        vi.mocked(display.setErrorState).mockClear();
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...defaultSettings(),
+          enableStreamingTranslation: false,
+        }));
+        const chrome = (globalThis as any).chrome;
+        chrome.runtime.sendMessage.mockImplementation(async (msg: any) =>
+          msg?.action === 'translate' ? { success: false, error: '401 Unauthorized' } : {},
+        );
+        const a = makePiece('a', 'Alpha text');
+        await testHooks.translatePieces([a]);
+        expect(testHooks.isSystemicPaused()).toBe(true);
+
+        chrome.runtime.sendMessage.mockImplementation(async (msg: any) =>
+          msg?.action === 'translate'
+            ? { success: true, results: [{ id: 'a', translatedText: 'Alfa' }] }
+            : {},
+        );
+        const retry = vi.mocked(display.setErrorState).mock.calls.at(-1)![3] as () => void;
+        retry();
+        await vi.waitFor(() => expect(a.isTranslated).toBe(true));
+        expect(notify.hideSystemicPauseBanner).toHaveBeenCalled();
+        expect(testHooks.isSystemicPaused()).toBe(false);
+      });
+    });
+
     it('bedw: marked back-fill shows incomplete error; a genuine source echo still applies', async () => {
       // Regression: back-fill detection must use the explicit `backfilled`
       // marker, not `partial && translatedText === piece.text` — the latter
