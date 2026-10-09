@@ -36,8 +36,25 @@ html[data-anyllm-state="dual"] tr[data-anyllm-role="translation"] {
   display: table-row;
 }
 
-html[data-anyllm-state="translation-only"] [data-anyllm-role="original"] {
+html[data-anyllm-state="translation-only"] [data-anyllm-role="original"]:not([data-anyllm-contained]) {
   display: none !important;
+}
+
+/* FR-7: contained hosts (li/td/th) keep their own children in place, so
+   translation-only hides the source inside the host instead of the host.
+   Bare text nodes cannot be selected — the host font-size is zeroed and
+   every surviving child restores the captured size. */
+html[data-anyllm-state="translation-only"] [data-anyllm-contained] {
+  font-size: 0 !important;
+}
+
+html[data-anyllm-state="translation-only"] [data-anyllm-contained] > :not([data-anyllm-role="translation"]):not(:has([data-anyllm-role="translation"], .anyllm-inline-bilingual)) {
+  display: none !important;
+}
+
+html[data-anyllm-state="translation-only"] [data-anyllm-contained] > *,
+html[data-anyllm-state="translation-only"] [data-anyllm-contained]::marker {
+  font-size: var(--anyllm-host-font-size, 1rem) !important;
 }
 
 html[data-anyllm-state="translation-only"] [data-anyllm-role="translation"] {
@@ -374,7 +391,7 @@ html.anyllm-dark [data-anyllm-theme="bubble"] .anyllm-translate-translation::bef
 /* ============================================
    THEME 9: side-by-side
    ============================================ */
-[data-anyllm-theme="side-by-side"] [data-anyllm-role="original"] {
+[data-anyllm-theme="side-by-side"] [data-anyllm-role="original"]:not([data-anyllm-contained]) {
   display: inline-block;
   width: 48%;
   vertical-align: top;
@@ -394,7 +411,7 @@ html.anyllm-dark [data-anyllm-theme="bubble"] .anyllm-translate-translation::bef
    Bumped from 600px to 800px so common 720px-wide article columns
    (Medium, Substack, GitHub blob view, etc.) stack instead of clipping. */
 @media (max-width: 800px) {
-  [data-anyllm-theme="side-by-side"] [data-anyllm-role="original"],
+  [data-anyllm-theme="side-by-side"] [data-anyllm-role="original"]:not([data-anyllm-contained]),
   [data-anyllm-theme="side-by-side"] .anyllm-translate-translation {
     display: block;
     width: 100%;
@@ -405,8 +422,8 @@ html.anyllm-dark [data-anyllm-theme="bubble"] .anyllm-translate-translation::bef
 /* Side-by-side fallback inside contained elements (li, td, th).
    At 48% the columns rarely fit inside table cells / list items —
    stack them vertically and remove the inline-block sizing so the
-   wrapper span and translation sibling render on their own line. */
-[data-anyllm-theme="side-by-side"] :is(li, td, th) [data-anyllm-role="original"],
+   source and translation render on their own line. */
+[data-anyllm-theme="side-by-side"] :is(li, td, th) [data-anyllm-role="original"]:not([data-anyllm-contained]),
 [data-anyllm-theme="side-by-side"] :is(li, td, th) .anyllm-translate-translation {
   display: block;
   width: auto;
@@ -636,7 +653,7 @@ html.anyllm-dark [data-anyllm-theme="custom"] .anyllm-translate-translation {
 /* ===== Translation Position Variants ===== */
 
 /* Position: above */
-[data-anyllm-position="above"] [data-anyllm-role="original"] {
+[data-anyllm-position="above"] [data-anyllm-role="original"]:not([data-anyllm-contained]) {
   order: 2;
 }
 
@@ -644,13 +661,13 @@ html.anyllm-dark [data-anyllm-theme="custom"] .anyllm-translate-translation {
   order: 1;
 }
 
-[data-anyllm-position="above"] [data-anyllm-role="original"],
+[data-anyllm-position="above"] [data-anyllm-role="original"]:not([data-anyllm-contained]),
 [data-anyllm-position="above"] .anyllm-translate-translation {
   display: block;
 }
 
 /* Position: side (handled by side-by-side theme primarily, but available for any theme) */
-[data-anyllm-position="side"]:not([data-anyllm-theme="side-by-side"]) [data-anyllm-role="original"] {
+[data-anyllm-position="side"]:not([data-anyllm-theme="side-by-side"]) [data-anyllm-role="original"]:not([data-anyllm-contained]) {
   display: inline-block;
   width: 48%;
   vertical-align: top;

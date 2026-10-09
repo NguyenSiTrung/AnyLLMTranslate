@@ -11,7 +11,15 @@ import type { RichVariable } from '@/lib/richTranslate';
 import type { PageState } from '@/lib/constants';
 import type { ThemeName, TranslationPosition, DarkMode, DisplayMode, CustomThemeConfig } from '@/types/config';
 
+/** Legacy (pre-FR-7) wrapper that older builds moved LI/TD/TH children into.
+ *  Only cleanup paths still look for it, so translated pages restore. */
 const ORIGINAL_WRAPPER_ATTR = 'data-anyllm-original-wrapper';
+/** FR-7: marks an LI/TD/TH that holds its translation as a child. CSS hides
+ *  its source in translation-only mode without moving any site node. */
+const CONTAINED_ATTR = 'data-anyllm-contained';
+/** FR-7: the host's own font size, captured before translation-only CSS sets
+ *  it to 0 (bare text children cannot be hidden by a selector). */
+const HOST_FONT_VAR = '--anyllm-host-font-size';
 const INLINE_CLONE_ATTR = 'data-anyllm-inline-clone-for';
 
 /** Track all inline-translation-only clone elements for O(1) removal
@@ -227,29 +235,53 @@ function markOriginalElement(parentElement: Element): void {
   parentElement.setAttribute(DATA_ATTRS.TRANSLATED, '');
 }
 
-function ensureOriginalWrapper(parentElement: Element): HTMLElement {
-  const existing = parentElement.querySelector(`:scope > [${ORIGINAL_WRAPPER_ATTR}]`);
-  if (existing instanceof HTMLElement) {
-    return existing;
+/** FR-7: record the host's computed font size for the translation-only rules. */
+function captureHostFontSize(host: Element): void {
+  if (!(host instanceof HTMLElement) || host.style.getPropertyValue(HOST_FONT_VAR)) return;
+  const fontSize = host.ownerDocument.defaultView?.getComputedStyle(host).fontSize;
+  if (fontSize && fontSize !== '0px') host.style.setProperty(HOST_FONT_VAR, fontSize);
+}
+
+/**
+ * FR-7: mark an LI/TD/TH as the original in place. Its children are never
+ * moved — frameworks (React) hold references and call
+ * `parent.removeChild(child)`, which throws once a child is re-parented.
+ */
+function markContainedHost(host: Element): void {
+  if (!host.hasAttribute(CONTAINED_ATTR)) {
+    // Read the size before the marker lets translation-only CSS zero it.
+    if (getPageState() === 'translation-only') captureHostFontSize(host);
+    host.setAttribute(CONTAINED_ATTR, '');
   }
+  markOriginalElement(host);
+}
 
-  const wrapper = document.createElement('span');
-  wrapper.setAttribute(ORIGINAL_WRAPPER_ATTR, '');
-  wrapper.setAttribute(DATA_ATTRS.ROLE, 'original');
-  wrapper.setAttribute(DATA_ATTRS.TRANSLATED, '');
-
-  while (parentElement.firstChild) {
-    wrapper.appendChild(parentElement.firstChild);
+/** Clear every original marker (and the FR-7 contained state) from `el`. */
+function unmarkOriginal(el: Element): void {
+  el.removeAttribute(DATA_ATTRS.ROLE);
+  el.removeAttribute(DATA_ATTRS.TRANSLATED);
+  if (!el.hasAttribute(CONTAINED_ATTR)) return;
+  el.removeAttribute(CONTAINED_ATTR);
+  if (el instanceof HTMLElement) {
+    el.style.removeProperty(HOST_FONT_VAR);
+    if (el.getAttribute('style') === '') el.removeAttribute('style');
   }
-  parentElement.appendChild(wrapper);
+}
 
-  return wrapper;
+/** Unwrap a legacy original wrapper, restoring its children to the parent. */
+function unwrapLegacyWrapper(wrapper: Element): void {
+  const parent = wrapper.parentElement;
+  if (!parent) return;
+  while (wrapper.firstChild) {
+    parent.insertBefore(wrapper.firstChild, wrapper);
+  }
+  wrapper.remove();
 }
 
 function insertIntoContainedElement(parentElement: Element, translationEl: HTMLElement): void {
-  const wrapper = ensureOriginalWrapper(parentElement);
+  markContainedHost(parentElement);
   if (isAbovePosition()) {
-    parentElement.insertBefore(translationEl, wrapper);
+    parentElement.insertBefore(translationEl, parentElement.firstChild);
   } else {
     parentElement.appendChild(translationEl);
   }
@@ -304,10 +336,10 @@ function insertTranslationElement(parentElement: Element, translationEl: HTMLEle
 
 function getInlineRenderTarget(parentElement: Element): Element {
   if (needsContainedTranslation(parentElement)) {
-    return ensureOriginalWrapper(parentElement);
+    markContainedHost(parentElement);
+  } else {
+    markOriginalElement(parentElement);
   }
-
-  markOriginalElement(parentElement);
   return parentElement;
 }
 
@@ -369,9 +401,10 @@ function syncInlineTranslationOnlySiblings(): void {
         if (lang) clone.setAttribute('lang', lang);
       }
 
-      const originalWrapper = inlineEl.closest(`[${ORIGINAL_WRAPPER_ATTR}]`);
-      if (originalWrapper?.parentElement && needsContainedTranslation(originalWrapper.parentElement)) {
-        originalWrapper.after(clone);
+      // FR-7: a contained host stays visible (only its source is hidden), so
+      // the clone sits inside it, right after the hidden inline element.
+      if (parent.hasAttribute(CONTAINED_ATTR)) {
+        inlineEl.after(clone);
       } else {
         parent.after(clone);
       }
@@ -800,8 +833,7 @@ export function removeTranslation(pieceId: string): void {
   // markers for completely unrelated translations.
   if (!originalAncestor) return;
   if (!hasOwnedArtifacts(originalAncestor)) {
-    originalAncestor.removeAttribute(DATA_ATTRS.ROLE);
-    originalAncestor.removeAttribute(DATA_ATTRS.TRANSLATED);
+    unmarkOriginal(originalAncestor);
   }
 }
 
@@ -829,12 +861,11 @@ export function removePieceArtifacts(pieceId: string, parentElement: Element): v
   // artifacts owned by it remain so the group can be re-extracted, while
   // artifacts owned by a nested marked original keep that original marked.
   if (isMarkedOriginal(parentElement) && !hasOwnedArtifacts(parentElement)) {
-    parentElement.removeAttribute(DATA_ATTRS.ROLE);
-    parentElement.removeAttribute(DATA_ATTRS.TRANSLATED);
+    unmarkOriginal(parentElement);
   }
 
-  // Contained case (LI/TD/TH): unwrap the original wrapper once no artifacts
-  // remain inside it, restoring raw source children to the parent.
+  // Legacy contained case (pre-FR-7 builds): unwrap the original wrapper once
+  // no artifacts remain inside it, restoring raw source children to the parent.
   const wrapper = parentElement.querySelector(`:scope > [${ORIGINAL_WRAPPER_ATTR}]`);
   if (
     wrapper &&
@@ -842,10 +873,7 @@ export function removePieceArtifacts(pieceId: string, parentElement: Element): v
       `[${DATA_ATTRS.ROLE}="translation"], [${DATA_ATTRS.PIECE_ID}], .anyllm-inline-bilingual`,
     )
   ) {
-    while (wrapper.firstChild) {
-      parentElement.insertBefore(wrapper.firstChild, wrapper);
-    }
-    wrapper.remove();
+    unwrapLegacyWrapper(wrapper);
   }
 
   // Transient loading/error state attrs on the original itself.
@@ -868,21 +896,15 @@ export function removeAllTranslations(): void {
       el.remove();
     }
 
-    // Clean up original markers
-    const originals = scope.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}]`);
+    // Clean up original markers (and FR-7 contained hosts)
+    const originals = scope.querySelectorAll(`[${DATA_ATTRS.TRANSLATED}], [${CONTAINED_ATTR}]`);
     for (const original of originals) {
-      original.removeAttribute(DATA_ATTRS.ROLE);
-      original.removeAttribute(DATA_ATTRS.TRANSLATED);
+      unmarkOriginal(original);
     }
 
-    const wrappers = scope.querySelectorAll(`[${ORIGINAL_WRAPPER_ATTR}]`);
-    for (const wrapper of wrappers) {
-      const parent = wrapper.parentElement;
-      if (!parent) continue;
-      while (wrapper.firstChild) {
-        parent.insertBefore(wrapper.firstChild, wrapper);
-      }
-      wrapper.remove();
+    // Pages translated by pre-FR-7 builds still carry original wrappers.
+    for (const wrapper of scope.querySelectorAll(`[${ORIGINAL_WRAPPER_ATTR}]`)) {
+      unwrapLegacyWrapper(wrapper);
     }
 
     // Clean up loading/error states on original elements (legacy data-anyllm-loading)
@@ -905,10 +927,20 @@ export function removeAllTranslations(): void {
 
 /** Set the page translation state */
 export function setPageState(state: PageState): void {
+  // FR-7: capture contained-host font sizes in one read pass before the
+  // translation-only rules zero them.
+  if (state === 'translation-only' && getPageState() !== 'translation-only') {
+    for (const scope of displayScopes()) {
+      scope.querySelectorAll(`[${CONTAINED_ATTR}]`).forEach(captureHostFontSize);
+    }
+  }
   document.documentElement.setAttribute(DATA_ATTRS.STATE, state);
   syncShadowHostState();
   syncInlineTranslationOnlySiblings();
 }
+
+/** Run the translation-only inline clone sync synchronously (tests). */
+export const __syncInlineSiblingsForTest = syncInlineTranslationOnlySiblings;
 
 /** Get the current page translation state */
 export function getPageState(): PageState {

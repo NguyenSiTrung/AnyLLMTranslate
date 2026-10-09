@@ -10,8 +10,11 @@ import { loadSettings } from '@/lib/config';
 import { findEffectiveRule, mergeExcludeSelectors } from '@/lib/siteRules';
 import { DATA_ATTRS } from '@/lib/constants';
 
-/** Matches translationDisplay's original-wrapper attribute (FR-5). */
+/** Matches translationDisplay's legacy original-wrapper attribute (FR-5). */
 const ORIGINAL_WRAPPER_ATTR = 'data-anyllm-original-wrapper';
+/** Matches translationDisplay's contained-host marker and font var (FR-7). */
+const CONTAINED_ATTR = 'data-anyllm-contained';
+const HOST_FONT_VAR = '--anyllm-host-font-size';
 
 interface TranslatedSection {
   element: Element;
@@ -180,13 +183,20 @@ export function removeSectionTranslation(sectionEl: Element): void {
 
   // Canonical marker cleanup: ROLE=original + TRANSLATED + loading/error attrs
   const marked = sectionEl.querySelectorAll(
-    `[${DATA_ATTRS.TRANSLATED}], [${DATA_ATTRS.ROLE}="original"]`,
+    `[${DATA_ATTRS.TRANSLATED}], [${DATA_ATTRS.ROLE}="original"], [${CONTAINED_ATTR}]`,
   );
   marked.forEach((el) => {
     el.removeAttribute(DATA_ATTRS.ROLE);
     el.removeAttribute(DATA_ATTRS.TRANSLATED);
     el.removeAttribute('data-anyllm-loading');
     el.removeAttribute('data-anyllm-error');
+    if (el.hasAttribute(CONTAINED_ATTR)) {
+      el.removeAttribute(CONTAINED_ATTR);
+      if (el instanceof HTMLElement) {
+        el.style.removeProperty(HOST_FONT_VAR);
+        if (el.getAttribute('style') === '') el.removeAttribute('style');
+      }
+    }
   });
 
   // Unwrap data-anyllm-original-wrapper nodes (same as removeAllTranslations)

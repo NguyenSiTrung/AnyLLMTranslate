@@ -21,6 +21,8 @@ import {
   findPieceElement,
   applyInlineTranslation,
   removePieceArtifacts,
+  showInlineLoadingPlaceholder,
+  __syncInlineSiblingsForTest as syncInlineSiblingsNow,
 } from '@/content/translationDisplay';
 import {
   registerShadowRoots,
@@ -496,14 +498,26 @@ describe('translationDisplay', () => {
       document.body.appendChild(wrapHost);
       registerShadowRoots(document.body);
 
-      // LI parents take the contained path: children move into an original wrapper.
+      // LI parents take the contained path: marked in place, children never moved (FR-7).
+      const liText = li.firstChild;
       applyTranslation(li, 'shadow-li', 'Mục danh sách');
-      expect(li.querySelector('[data-anyllm-original-wrapper]')).not.toBeNull();
+      expect(li.querySelector('[data-anyllm-original-wrapper]')).toBeNull();
+      expect(li.hasAttribute('data-anyllm-contained')).toBe(true);
+      expect(liText?.parentNode).toBe(li);
 
       removeAllTranslations();
 
-      expect(li.querySelector('[data-anyllm-original-wrapper]')).toBeNull();
+      expect(li.hasAttribute('data-anyllm-contained')).toBe(false);
       expect(li.textContent).toBe('List item in shadow.');
+
+      // Legacy pages translated by older builds still unwrap cleanly.
+      const legacy = document.createElement('li');
+      legacy.innerHTML =
+        '<span data-anyllm-original-wrapper="" data-anyllm-role="original" data-anyllm-translated="">' +
+        'Old <b>item</b></span><span data-anyllm-role="translation">Cũ</span>';
+      wrapShadow.appendChild(legacy);
+      removeAllTranslations();
+      expect(legacy.innerHTML).toBe('Old <b>item</b>');
     });
 
     it('creates translation-only sibling clones inside registered roots, and page-state mutations mirror onto shadow hosts', () => {
@@ -538,4 +552,91 @@ describe('translationDisplay', () => {
     });
   });
 
+
+  describe('contained LI/TD/TH hosts never re-parent site nodes (FR-7)', () => {
+    function buildReactLikeItem(): { li: HTMLLIElement; children: ChildNode[] } {
+      const list = document.createElement('ul');
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.textContent = 'link';
+      li.append(document.createTextNode('Item '), a, document.createTextNode(' tail'));
+      list.appendChild(li);
+      document.body.appendChild(list);
+      return { li, children: [...li.childNodes] };
+    }
+
+    it.each(['dual', 'translation-only'] as const)(
+      'keeps held child references removable in %s mode (block and inline paths)',
+      (mode) => {
+        setPageState(mode);
+        const block = buildReactLikeItem();
+        showLoadingPlaceholder(block.li, 'li-block');
+        applyTranslation(block.li, 'li-block', 'Mục liên kết đuôi');
+        expect(block.li.lastElementChild?.getAttribute('data-anyllm-piece-id')).toBe('li-block');
+        expect(block.li.getAttribute('data-anyllm-role')).toBe('original');
+        expect(block.li.hasAttribute('data-anyllm-contained')).toBe(true);
+
+        const inline = buildReactLikeItem();
+        showInlineLoadingPlaceholder(inline.li, 'li-inline');
+        applyInlineTranslation(inline.li, 'li-inline', 'Mục');
+        syncInlineSiblingsNow();
+
+        for (const { li, children } of [block, inline]) {
+          for (const child of children) {
+            expect(child.parentNode).toBe(li);
+            // React's commit phase: parent.removeChild(heldRef) must not throw.
+            expect(() => li.removeChild(child)).not.toThrow();
+          }
+        }
+      },
+    );
+
+    it('places translation-only clones and position-above translations inside the host without moving children', () => {
+      setPageState('translation-only');
+      const { li, children } = buildReactLikeItem();
+      applyInlineTranslation(li, 'li-clone', 'Mục');
+      syncInlineSiblingsNow();
+      const clone = li.querySelector('.anyllm-inline-translation-only-clone');
+      expect(clone?.parentElement).toBe(li);
+      expect(clone?.previousElementSibling?.getAttribute('data-anyllm-piece-id')).toBe('li-clone');
+      expect(children.every((child) => child.parentNode === li)).toBe(true);
+
+      applyPosition('above');
+      const td = document.createElement('td');
+      td.textContent = 'Cell text';
+      const row = document.createElement('tr');
+      row.appendChild(td);
+      document.body.appendChild(document.createElement('table')).appendChild(row);
+      applyTranslation(td, 'td-above', 'Ô');
+      expect(td.firstElementChild?.getAttribute('data-anyllm-piece-id')).toBe('td-above');
+      expect(td.lastChild?.textContent).toBe('Cell text');
+    });
+
+    it('restores contained hosts on per-piece and full removal', () => {
+      const { li } = buildReactLikeItem();
+      applyTranslation(li, 'li-a', 'A');
+      removePieceArtifacts('li-a', li);
+      for (const attr of ['data-anyllm-contained', 'data-anyllm-role', 'data-anyllm-translated']) {
+        expect(li.hasAttribute(attr)).toBe(false);
+      }
+
+      applyTranslation(li, 'li-b', 'B');
+      removeTranslation('li-b');
+      expect(li.hasAttribute('data-anyllm-contained')).toBe(false);
+
+      applyTranslation(li, 'li-c', 'C');
+      removeAllTranslations();
+      expect(li.hasAttribute('data-anyllm-contained')).toBe(false);
+      expect(li.textContent).toBe('Item link tail');
+    });
+
+    it('scopes the translation-only hide rule away from contained hosts in inject.css', async () => {
+      const { readFileSync } = await import('node:fs');
+      const css = readFileSync(`${process.cwd()}/styles/inject.css`, 'utf8');
+      expect(css).toContain(
+        'html[data-anyllm-state="translation-only"] [data-anyllm-role="original"]:not([data-anyllm-contained])',
+      );
+      expect(css).toMatch(/\[data-anyllm-contained\]\s*>\s*:not\(\[data-anyllm-role="translation"\]\)/);
+    });
+  });
 });

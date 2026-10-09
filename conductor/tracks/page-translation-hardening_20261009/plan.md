@@ -35,7 +35,7 @@ Each task is TDD: write the failing test → implement → run the affected suit
 <!-- depends: -->
 <!-- files: content/translationDisplay.ts, styles/, related tests -->
 
-- [ ] Task 2.1: Append-only LI/TD/TH insertion (FR-7)
+- [x] Task 2.1: Append-only LI/TD/TH insertion (FR-7)
   - [ ] Test: after translating an LI with held child references, `li.removeChild(child)` succeeds in dual and translation-only modes; original children keep their parent; translation-only hides originals via CSS; legacy `ORIGINAL_WRAPPER_ATTR` pages still restore cleanly
   - [ ] Implement in `insertIntoContainedElement` / `getInlineRenderTarget` / `removeAllTranslations` plus scoped CSS in `styles/`
 - [ ] Task 2.2: Debounce translation-only inline copy sync (FR-8)

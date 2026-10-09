@@ -72,3 +72,13 @@ From Beads memory `subtitle-chunk-retry-classification`:
 ## [2026-10-09] - Phase 1 gate
 - tsc 0 errors; lint back to the 38 baseline after fixing one `prefer-const` the gate caught; `pnpm test` 755/757 with 2 × 5 s timeouts in `subtitleCoordinator.test.ts` (known load-sensitive file; isolated reruns 2/3 green with a moving failing case).
 ---
+
+## [2026-10-09] - Phase 2 Task 1: Append-only LI/TD/TH insertion (FR-7)
+- **Implemented:** contained hosts are marked in place (`data-anyllm-contained` + role=original/TRANSLATED) instead of wrapping children; translation appended (or prepended for "above"); inline clone goes right after the inline element inside the host.
+- **Files changed:** content/translationDisplay.ts, content/sectionTranslate.ts, styles/inject.css, content/__tests__/translationDisplay.test.ts
+- **Learnings:**
+  - Patterns: Marking the host itself as role=original keeps every existing ownership check (ownerOriginalFor, hasOwnedArtifacts, mutation watcher originalHostFor, walker TRANSLATED skip) working with zero changes.
+  - Gotchas: Bare text nodes cannot be hidden by a selector — translation-only hides contained source via host `font-size:0` + child restore from a captured `--anyllm-host-font-size` var (read before the state flips, batched in setPageState).
+  - Gotchas: every role=original theme/position rule (side-by-side 48%, above order/display) must be scoped `:not([data-anyllm-contained])` or it resizes the LI/TD itself.
+  - Context: legacy `data-anyllm-original-wrapper` unwrap stays in cleanup paths for pages translated by older builds.
+---
