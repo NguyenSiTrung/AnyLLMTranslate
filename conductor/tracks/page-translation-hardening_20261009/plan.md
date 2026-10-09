@@ -15,9 +15,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 1.2: Group-scoped rich encoding (FR-1)
   - [x] Test: nested-list probe yields `Item <z id="0">here</z>`; excluded/`translate="no"`/`pre` subtree inside anchor never appears in rich text; multi-group parent (`Text A <p>…</p> Text B`) encodes each group separately
   - [x] Implement a node-based encoder in `lib/richTranslate.ts` (`encodeInlineNodes(textNodes, anchor)`) and switch `domWalker.ts:255` to it; keep `encodeInlineHtml` for other callers or remove if unused
-- [ ] Task 1.3: Entities and void tags (FR-2)
-  - [ ] Test: `Tom &amp; Jerry<br>x <a>link</a>` encodes to `Tom & Jerry\nx <z id="0">link</z>`; decode renders no literal `&amp;`/`<br>`; `img[alt]` handling
-  - [ ] Implement in the node-based encoder (text from `Text.data`, BR → `\n`)
+- [x] Task 1.3: Entities and void tags (FR-2)
+  - [x] Test: `Tom &amp; Jerry<br>x <a>link</a>` encodes to `Tom & Jerry\nx <z id="0">link</z>`; decode renders no literal `&amp;`/`<br>`; `img[alt]` handling
+  - [x] Implement in the node-based encoder (text from `Text.data`, BR → `\n`)
 - [ ] Task 1.4: Skip code blocks by default (FR-4)
   - [ ] Test: `<pre>` on a host without site rules is not extracted with default settings; inline `code` stays in the parent piece
   - [ ] Add `pre` (and block code containers) to `SMART_EXCLUDE_SELECTORS` in `types/config.ts`

@@ -38,3 +38,10 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Patterns: encode from the walker's accepted nodes, never from serialized HTML — the walker's accept/reject decisions (exclude selectors, `translate="no"`, SKIP_ELEMENTS, block splits) are then automatically honored by the rich text.
   - Gotchas: `lib/` must not import `content/`; the `<br>` separator is injected as a callback (`groupSeparator`).
 ---
+
+## [2026-10-09] - Phase 1 Task 1.3: Entities and void tags (FR-2)
+- **Implemented:** Text/`<br>`/void handling came with the node encoder (Text.data, `groupSeparator`, voids are never text nodes). New here: `decodeAttrEntities()` in `parseOpenTag`, so `href="/q?a=1&amp;b=2"` decodes to `a=1&b=2` (it was a pre-existing bug in the innerHTML path too). `img alt` is not carried (spec "may").
+- **Files changed:** lib/richTranslate.ts, lib/__tests__/richTranslate.test.ts, content/__tests__/domWalker.hardening.test.ts
+- **Learnings:**
+  - Gotchas: decode attribute entities BEFORE the `isSafeUrl` check — `&#106;avascript:` must be judged as `javascript:`.
+---

@@ -123,6 +123,12 @@ describe('richTranslate', () => {
     expect(a?.getAttribute('onclick')).toBeNull();
     expect(a?.getAttribute('href')).toBeNull();
 
+    // Entity-encoded schemes are decoded before the URL check, so still blocked.
+    const encodedScheme = decodeInlineHtml('<z id="0">x</z>', [
+      { id: 0, tag: 'A', openHtml: '<a href="&#106;avascript:alert(1)">', closeHtml: '</a>' },
+    ]);
+    expect(encodedScheme.querySelector('a')?.getAttribute('href')).toBeNull();
+
     const safe = decodeInlineHtml('<z id="0">word</z>', [
       {
         id: 0,

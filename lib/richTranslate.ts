@@ -150,6 +150,21 @@ interface ParsedTag {
   attrs: Map<string, string>;
 }
 
+const NAMED_ENTITIES: Record<string, string> = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+
+/**
+ * FR-2: decode the character references an attribute value can carry in
+ * `openHtml` (ours escape `&` and `"`; page markup may use more), so
+ * `setAttribute` receives `a=1&b=2`, not the literal `a=1&amp;b=2`.
+ */
+function decodeAttrEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, ref: string) => {
+    if (ref[0] !== '#') return NAMED_ENTITIES[ref.toLowerCase()] ?? whole;
+    const code = ref[1] === 'x' || ref[1] === 'X' ? parseInt(ref.slice(2), 16) : parseInt(ref.slice(1), 10);
+    return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+  });
+}
+
 function parseOpenTag(openHtml: string): ParsedTag | null {
   const m = openHtml.match(/^<([a-zA-Z][a-zA-Z0-9-]*)((?:[^<>]|"[^"]*"|'[^']*')*)>$/);
   if (!m) return null;
@@ -157,7 +172,7 @@ function parseOpenTag(openHtml: string): ParsedTag | null {
   const attrs = new Map<string, string>();
   for (const am of m[2].matchAll(ATTR_RE)) {
     const name = am[1].toLowerCase();
-    const value = am[2] ?? am[3] ?? am[4] ?? '';
+    const value = decodeAttrEntities(am[2] ?? am[3] ?? am[4] ?? '');
     attrs.set(name, value);
   }
   return { tag, attrs };

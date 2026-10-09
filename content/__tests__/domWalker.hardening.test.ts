@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { extractPieces, resetPieceCounter } from '../domWalker';
 import { joinGroupText } from '../pieceText';
 import { __resetMatchCacheForTest } from '@/lib/domUtils';
+import { decodeInlineHtml } from '@/lib/richTranslate';
 
 function setBody(html: string): void {
   document.body.innerHTML = html;
@@ -71,5 +72,33 @@ describe('domWalker — group-scoped rich encoding (FR-1)', () => {
     ]);
     expect(pieces[0].variables?.map((v) => v.tag)).toEqual(['EM']);
     expect(pieces[2].variables?.map((v) => v.tag)).toEqual(['I']);
+  });
+});
+
+describe('domWalker — decoded entities and void tags in rich text (FR-2)', () => {
+  it('sends decoded characters and newlines, and decodes without literal tags or entities', () => {
+    setBody('<p>Tom &amp; Jerry<br>x <a href="#">link</a></p>');
+    const [piece] = extractPieces(document.body, { enableRichTranslate: true });
+    expect(piece.text).toBe('Tom & Jerry\nx <z id="0">link</z>');
+
+    const frag = decodeInlineHtml(piece.text, piece.variables ?? []);
+    expect(frag.textContent).toBe('Tom & Jerry\nx link');
+    expect(frag.textContent).not.toMatch(/&amp;|<br>|<z/);
+    expect([...frag.querySelectorAll('*')].map((el) => el.tagName)).toEqual(['A']);
+  });
+
+  it('drops img/wbr from the LLM text', () => {
+    setBody('<p>See <b>the<wbr>logo</b> <img src="x.png" alt="logo"> here</p>');
+    const [piece] = extractPieces(document.body, { enableRichTranslate: true });
+    expect(piece.text).not.toMatch(/<img|<wbr/);
+    expect(piece.text).toBe('See <z id="0">thelogo</z>  here');
+  });
+
+  it('round-trips attribute values that need escaping', () => {
+    setBody('<p>Go <a href="/q?a=1&amp;b=2" title=\'say "hi" &amp; wave\'>there</a> now</p>');
+    const [piece] = extractPieces(document.body, { enableRichTranslate: true });
+    const a = decodeInlineHtml(piece.text, piece.variables ?? []).querySelector('a');
+    expect(a?.getAttribute('href')).toBe('/q?a=1&b=2');
+    expect(a?.getAttribute('title')).toBe('say "hi" & wave');
   });
 });
