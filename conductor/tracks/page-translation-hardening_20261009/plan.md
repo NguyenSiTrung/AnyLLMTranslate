@@ -5,6 +5,7 @@
 Each task is TDD: write the failing test → implement → run the affected suites → commit (`fix(<scope>): … [page-translation-hardening Px.Ty]`) with a git note. Phases 1 and 2 touch disjoint files and may run in parallel; Phases 3–5 run sequentially after both. No manual verification — each phase closes on the automated gate.
 
 ## Phase 1: Extraction correctness
+<!-- gate 2026-10-09: tsc 0; lint 38 (baseline); pnpm test 755/757 — 2 timeouts in known-flaky subtitleCoordinator.test.ts, moving set on 3 isolated reruns (2 green) -->
 <!-- execution: sequential -->
 <!-- depends: -->
 <!-- files: content/domWalker.ts, lib/richTranslate.ts, types/config.ts, related tests -->
@@ -27,7 +28,7 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 1.6: Visually-block custom elements split pieces (FR-6)
   - [x] Test: two sibling `<x-card>` elements with text under one `<div>` become two pieces; `span` with computed `display:block` splits; standard inline tags never call `getComputedStyle`
   - [x] Implement `isBlockElement` fallback with per-walk cache
-- [ ] Task: Automated phase gate 'Phase 1: Extraction correctness' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
+- [x] Task: Automated phase gate 'Phase 1: Extraction correctness' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
 
 ## Phase 2: Display safety
 <!-- execution: sequential -->

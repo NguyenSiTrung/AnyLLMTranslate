@@ -190,7 +190,7 @@ function findCut(text: string, maxChars: number): number {
  */
 function balanceZTags(parts: string[]): string[] {
   const balanced: string[] = [];
-  let open: string[] = [];
+  const open: string[] = [];
   for (const part of parts) {
     const prefix = open.join('');
     for (const m of part.matchAll(Z_TOKEN_RE)) {

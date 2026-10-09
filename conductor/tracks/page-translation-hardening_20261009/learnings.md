@@ -68,3 +68,7 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Context: jsdom does implement `getComputedStyle().display` (div→block, span/custom→inline, inline `style` honored), so FR-6 is unit-testable; spy on `window.getComputedStyle` and call it via `ownerDocument.defaultView`.
   - Gotchas: custom elements default to `display:inline` in browsers and jsdom; a pure computed-style rule would never split unstyled `<x-card>`s, while an unconditional rule splits GitHub's inline `<relative-time>` out of its sentence — hence the prose-adjacency tie-breaker.
 ---
+
+## [2026-10-09] - Phase 1 gate
+- tsc 0 errors; lint back to the 38 baseline after fixing one `prefer-const` the gate caught; `pnpm test` 755/757 with 2 × 5 s timeouts in `subtitleCoordinator.test.ts` (known load-sensitive file; isolated reruns 2/3 green with a moving failing case).
+---
