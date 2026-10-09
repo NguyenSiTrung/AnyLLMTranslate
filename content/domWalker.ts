@@ -7,8 +7,8 @@
 import type { TranslationPiece } from '@/types/translation';
 import { deduplicateAncestors, matchesCached, classifyInArticle, findAsideRegionRoot } from '@/lib/domUtils';
 import { registerShadowRoots } from './shadowDomRoots';
-import { joinGroupText } from './pieceText';
-import { encodeInlineHtml } from '@/lib/richTranslate';
+import { groupSeparator, joinGroupText } from './pieceText';
+import { encodeInlineNodes } from '@/lib/richTranslate';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS, BODY_TRANSLATE_TAGS, ASIDE_MAX_TEXT_PER_PARAGRAPH, ASIDE_MAX_TEXT_PER_REGION } from '@/lib/constants';
 
 let pieceCounter = 0;
@@ -245,15 +245,17 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
       return;
     }
 
-    // Rich translate: encode inline markup from the anchor's innerHTML so the
-    // LLM receives `<z id="N">…</z>` tokens and the markup can be reconstructed
-    // on decode (FR-1). FR-19: also keep variables when the encoded text must
-    // be sentence-split — each sub-piece carries the full variable map (decode
-    // only uses z-ids present in that part's text).
+    // Rich translate: encode this group's own text nodes and their inline
+    // ancestors so the LLM receives `<z id="N">…</z>` tokens and the markup
+    // can be reconstructed on decode. Never the anchor's innerHTML — that
+    // drags in nested blocks, other groups and rejected subtrees (FR-1).
+    // FR-19: also keep variables when the encoded text must be sentence-split
+    // — each sub-piece carries the full variable map (decode only uses z-ids
+    // present in that part's text).
     let richText = trimmed;
     let richVariables: TranslationPiece['variables'];
     if (options.enableRichTranslate && anchorElement) {
-      const encoded = encodeInlineHtml(anchorElement.innerHTML);
+      const encoded = encodeInlineNodes(currentTextNodes, anchorElement, groupSeparator);
       if (encoded.variables.length > 0) {
         richText = encoded.flatText.trim();
         richVariables = encoded.variables;

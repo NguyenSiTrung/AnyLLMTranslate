@@ -66,78 +66,69 @@ export interface EncodeResult {
   variables: RichVariable[];
 }
 
-/** Void/self-closing HTML elements that never get a closing tag. */
-const VOID_ELEMENTS = new Set([
-  'AREA', 'BASE', 'BR', 'COL', 'EMBED', 'HR', 'IMG', 'INPUT', 'LINK', 'META',
-  'PARAM', 'SOURCE', 'TRACK', 'WBR',
-]);
+/** Escape an attribute value for a double-quoted `openHtml` attribute. */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
 
-const TAG_RE = /<(\/)?([a-zA-Z][a-zA-Z0-9-]*)((?:[^<>]|"[^"]*"|'[^']*')*)>/g;
+/** Serialize an element's opening tag (attributes escaped, double-quoted). */
+function serializeOpenTag(el: Element): string {
+  let attrs = '';
+  for (const attr of Array.from(el.attributes)) {
+    attrs += ` ${attr.name}="${escapeAttr(attr.value)}"`;
+  }
+  return `<${el.tagName.toLowerCase()}${attrs}>`;
+}
+
+/** Whitelisted inline ancestors of `node` below `anchor`, outermost first. */
+function inlineChain(node: Node, anchor: Element): Element[] {
+  const chain: Element[] = [];
+  for (let el = node.parentElement; el && el !== anchor; el = el.parentElement) {
+    if (INLINE_SET.has(el.tagName)) chain.push(el);
+  }
+  return chain.reverse();
+}
 
 /**
- * Encode inline HTML elements as numbered placeholders. Non-inline and void
- * elements are left verbatim in the flat text. Nested inline elements are
- * encoded outer-first (the outer wrapper gets the lower id).
+ * Encode one piece group: the group's own text nodes plus their whitelisted
+ * inline ancestors up to `anchor`, as `<z id="N">…</z>` placeholders (FR-1).
+ * Block descendants, walker-rejected subtrees and comments are never in
+ * `textNodes`, so they cannot leak into the LLM text. Text comes from
+ * `Text.data`, so characters stay decoded (`&`, not `&amp;`) (FR-2), and
+ * `separator` supplies the `\n` for `<br>` between adjacent nodes. Nested
+ * inline elements are encoded outer-first (the outer wrapper gets the lower id).
  */
-export function encodeInlineHtml(html: string): EncodeResult {
+export function encodeInlineNodes(
+  textNodes: readonly Text[],
+  anchor: Element,
+  separator: (prev: Text, next: Text) => string = () => '',
+): EncodeResult {
   const variables: RichVariable[] = [];
-  if (!html) return { flatText: '', variables };
-
+  const ids = new Map<Element, number>();
+  let open: Element[] = [];
   let out = '';
-  let last = 0;
-  /** Stack of open inline placeholder ids awaiting their closing tag. */
-  const openStack: number[] = [];
-  let nextId = 0;
 
-  for (const match of html.matchAll(TAG_RE)) {
-    const [whole, slash, tagRaw, attrs] = match;
-    const tag = tagRaw.toUpperCase();
-    const index = (match.index ?? 0);
-
-    // Append the text preceding this tag verbatim.
-    out += html.slice(last, index);
-    last = index + whole.length;
-
-    const isInline = INLINE_SET.has(tag);
-    const isVoid = VOID_ELEMENTS.has(tag);
-    const selfClosing = attrs.trimEnd().endsWith('/');
-
-    if (!isInline || isVoid || selfClosing) {
-      // Leave non-inline / void / self-closing tags as-is (no placeholder).
-      out += whole;
-      continue;
-    }
-
-    if (!slash) {
-      // Opening inline tag → push a placeholder.
-      const id = nextId++;
-      variables.push({ id, tag, openHtml: whole, closeHtml: `</${tagRaw.toLowerCase()}>` });
-      openStack.push(id);
+  textNodes.forEach((node, index) => {
+    const chain = inlineChain(node, anchor);
+    let shared = 0;
+    while (shared < open.length && shared < chain.length && open[shared] === chain[shared]) shared++;
+    out += '</z>'.repeat(open.length - shared);
+    if (index > 0) out += separator(textNodes[index - 1], node);
+    for (const el of chain.slice(shared)) {
+      let id = ids.get(el);
+      if (id === undefined) {
+        id = variables.length;
+        ids.set(el, id);
+        const tag = el.tagName.toUpperCase();
+        variables.push({ id, tag, openHtml: serializeOpenTag(el), closeHtml: `</${tag.toLowerCase()}>` });
+      }
       out += `<z id="${id}">`;
-    } else {
-      // Closing inline tag → pop the matching placeholder.
-      // Find the nearest open placeholder of the same tag (tolerant nesting).
-      let poppedId: number | undefined;
-      for (let i = openStack.length - 1; i >= 0; i--) {
-        if (variables[openStack[i]]?.tag === tag) {
-          poppedId = openStack[i];
-          openStack.splice(i, 1);
-          break;
-        }
-      }
-      if (poppedId === undefined) {
-        // Stray closing tag with no opener — emit verbatim.
-        out += whole;
-      } else {
-        out += '</z>';
-      }
     }
-  }
-  // Trailing text.
-  out += html.slice(last);
+    open = chain;
+    out += node.data;
+  });
+  out += '</z>'.repeat(open.length);
 
-  // Sort variables by id for stable decode lookup.
-  variables.sort((a, b) => a.id - b.id);
   return { flatText: out, variables };
 }
 
@@ -211,7 +202,7 @@ function buildSanitizedElement(variable: RichVariable): Element | null {
 
 /**
  * Rebuild a safe `DocumentFragment` from translated flat text + the variables
- * produced by {@link encodeInlineHtml}. Text nodes are appended verbatim
+ * produced by {@link encodeInlineNodes}. Text nodes are appended verbatim
  * (never parsed as HTML); elements are reconstructed via `createElement`.
  */
 export function decodeInlineHtml(translated: string, variables: RichVariable[]): DocumentFragment {

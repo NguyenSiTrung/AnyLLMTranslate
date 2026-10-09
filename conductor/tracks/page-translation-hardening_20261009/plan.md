@@ -12,9 +12,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 1.1: `<br>` → `\n` in plain piece text (FR-3)
   - [x] Test: `Plain<br>break` → `Plain\nbreak`; multiple `<br>` collapse sensibly; `sourceText` baseline matches what `isPieceSourceUnchanged` recomputes
   - [x] Implement in `extractPieces` walk (track BR between text nodes of the current group) and keep `isPieceSourceUnchanged` consistent
-- [ ] Task 1.2: Group-scoped rich encoding (FR-1)
-  - [ ] Test: nested-list probe yields `Item <z id="0">here</z>`; excluded/`translate="no"`/`pre` subtree inside anchor never appears in rich text; multi-group parent (`Text A <p>…</p> Text B`) encodes each group separately
-  - [ ] Implement a node-based encoder in `lib/richTranslate.ts` (`encodeInlineNodes(textNodes, anchor)`) and switch `domWalker.ts:255` to it; keep `encodeInlineHtml` for other callers or remove if unused
+- [x] Task 1.2: Group-scoped rich encoding (FR-1)
+  - [x] Test: nested-list probe yields `Item <z id="0">here</z>`; excluded/`translate="no"`/`pre` subtree inside anchor never appears in rich text; multi-group parent (`Text A <p>…</p> Text B`) encodes each group separately
+  - [x] Implement a node-based encoder in `lib/richTranslate.ts` (`encodeInlineNodes(textNodes, anchor)`) and switch `domWalker.ts:255` to it; keep `encodeInlineHtml` for other callers or remove if unused
 - [ ] Task 1.3: Entities and void tags (FR-2)
   - [ ] Test: `Tom &amp; Jerry<br>x <a>link</a>` encodes to `Tom & Jerry\nx <z id="0">link</z>`; decode renders no literal `&amp;`/`<br>`; `img[alt]` handling
   - [ ] Implement in the node-based encoder (text from `Text.data`, BR → `\n`)

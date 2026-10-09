@@ -30,3 +30,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: `webTranslateLifecycle.test.ts` `vi.doMock`s `@/content/domWalker` as `{ extractPieces }` only — any new helper content.ts needs from the walker must live in a separate module (hence `pieceText.ts`).
   - Patterns: the extraction baseline (`sourceText`) and the sm7n live recompute must use one shared join function, or every `<br>` paragraph invalidates on the first mutation.
 ---
+
+## [2026-10-09] - Phase 1 Task 1.2: Group-scoped rich encoding (FR-1)
+- **Implemented:** `encodeInlineNodes(textNodes, anchor, separator)` in `lib/richTranslate.ts` replaces the regex `encodeInlineHtml(anchor.innerHTML)`. It walks the group's own text nodes, diffs each node's whitelisted inline-ancestor chain against the open stack, and emits `<z id>` / `</z>` transitions; `openHtml` is serialized from `el.attributes`. `encodeInlineHtml` removed (only tests used it); the rich test keeps its assertions through a small snippet→nodes helper.
+- **Files changed:** lib/richTranslate.ts, content/domWalker.ts, lib/__tests__/richTranslate.test.ts, content/__tests__/domWalker.hardening.test.ts
+- **Learnings:**
+  - Patterns: encode from the walker's accepted nodes, never from serialized HTML — the walker's accept/reject decisions (exclude selectors, `translate="no"`, SKIP_ELEMENTS, block splits) are then automatically honored by the rich text.
+  - Gotchas: `lib/` must not import `content/`; the `<br>` separator is injected as a callback (`groupSeparator`).
+---

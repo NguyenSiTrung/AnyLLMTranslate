@@ -3,11 +3,21 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  encodeInlineHtml,
+  encodeInlineNodes,
   decodeInlineHtml,
   INLINE_ELEMENTS,
   isInlineTagName,
 } from '../richTranslate';
+
+/** Encode every text node of an HTML snippet as one group anchored at a <div>. */
+function encodeInlineHtml(html: string, separator?: (prev: Text, next: Text) => string) {
+  const anchor = document.createElement('div');
+  anchor.innerHTML = html;
+  const nodes: Text[] = [];
+  const walker = document.createTreeWalker(anchor, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+  return encodeInlineNodes(nodes, anchor, separator);
+}
 
 describe('richTranslate', () => {
   it('encodes inline markup, round-trips decode with LLM text swap, and defends against XSS/injection', () => {
@@ -21,8 +31,9 @@ describe('richTranslate', () => {
 
     expect(encodeInlineHtml('Hello world')).toEqual({ flatText: 'Hello world', variables: [] });
     expect(encodeInlineHtml('')).toEqual({ flatText: '', variables: [] });
-    expect(encodeInlineHtml('line one<br>line two')).toEqual({
-      flatText: 'line one<br>line two',
+    // FR-2: void tags never reach the LLM text; the separator supplies the break.
+    expect(encodeInlineHtml('line one<br>line two', () => '\n')).toEqual({
+      flatText: 'line one\nline two',
       variables: [],
     });
 
@@ -42,8 +53,9 @@ describe('richTranslate', () => {
     expect(nested.flatText).toBe('<z id="0">bold <z id="1">link</z></z>');
     expect(nested.variables.map((v) => v.tag)).toEqual(['A', 'STRONG']);
 
+    // FR-1: non-inline wrappers are transparent — no raw block markup leaks.
     const block = encodeInlineHtml('<p>Hello <em>there</em></p>');
-    expect(block.flatText).toBe('<p>Hello <z id="0">there</z></p>');
+    expect(block.flatText).toBe('Hello <z id="0">there</z>');
     expect(block.variables[0].tag).toBe('EM');
 
     const code = encodeInlineHtml('Use <code>npm install</code> to install.');
@@ -82,7 +94,7 @@ describe('richTranslate', () => {
     expect(frag.querySelector('a')?.getAttribute('href')).toBe('https://x.test');
     expect(frag.querySelector('strong')?.textContent).toBe('bold');
     expect(frag.querySelector('em')?.textContent).toBe('italic');
-        expect(frag.querySelector('code')?.textContent).toBe('code()');
+    expect(frag.querySelector('code')?.textContent).toBe('code()');
 
     // defends against unknown placeholders, HTML injection, and XSS attrs/tags
     const unknown = decodeInlineHtml('text <z id="99">x</z>', []);

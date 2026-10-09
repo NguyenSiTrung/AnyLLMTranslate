@@ -37,3 +37,39 @@ describe('domWalker — <br> line breaks in plain piece text (FR-3)', () => {
     expect(joinGroupText(piece.textNodes).trim()).toBe(piece.sourceText);
   });
 });
+
+describe('domWalker — group-scoped rich encoding (FR-1)', () => {
+  const rich = { enableRichTranslate: true } as const;
+
+  it('encodes only the piece group, never nested blocks or rejected subtrees', () => {
+    // Nested list: the parent LI piece must not carry the child UL as raw HTML.
+    setBody('<ul><li>Item <a href="#">here</a><ul><li>Sub item text</li></ul></li></ul>');
+    let pieces = extractPieces(document.body, rich);
+    expect(pieces.map((p) => p.text)).toEqual(['Item <z id="0">here</z>', 'Sub item text']);
+
+    // Hard-skipped subtrees inside the anchor never leak into the rich text.
+    setBody(
+      '<div><b>Lead</b> text <div class="notranslate">SECRET_A</div>' +
+        '<div translate="no">SECRET_B</div><pre>SECRET_C</pre>' +
+        '<script>SECRET_D</script><!-- SECRET_E --> tail</div>',
+    );
+    pieces = extractPieces(document.body, { ...rich, excludeSelectors: ['pre'] });
+    const all = pieces.map((p) => p.text).join(' | ');
+    for (const secret of ['SECRET_A', 'SECRET_B', 'SECRET_C', 'SECRET_D', 'SECRET_E']) {
+      expect(all).not.toContain(secret);
+    }
+    expect(all).toContain('<z id="0">Lead</z> text');
+  });
+
+  it('encodes each source group of a multi-group parent separately', () => {
+    setBody('<div>Text <em>A</em> lead <p>Inner <b>para</b></p> Text <i>B</i> tail</div>');
+    const pieces = extractPieces(document.body, rich);
+    expect(pieces.map((p) => p.text)).toEqual([
+      'Text <z id="0">A</z> lead',
+      'Inner <z id="0">para</z>',
+      'Text <z id="0">B</z> tail',
+    ]);
+    expect(pieces[0].variables?.map((v) => v.tag)).toEqual(['EM']);
+    expect(pieces[2].variables?.map((v) => v.tag)).toEqual(['I']);
+  });
+});
