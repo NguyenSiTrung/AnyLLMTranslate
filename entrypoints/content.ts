@@ -1129,29 +1129,17 @@ function scheduleLookaheadPrefetch(): void {
     return;
   }
 
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const observer = viewportObserver;
+  if (!observer) return;
   const candidateIds = new Set(
     selectLookaheadCandidates(
-      allPieces.map((piece) => {
-        let top = Number.POSITIVE_INFINITY;
-        try {
-          top = piece.parentElement.getBoundingClientRect().top;
-        } catch {
-          /* detached */
-        }
-        return {
-          id: piece.id,
-          isTranslated: piece.isTranslated,
-          inFlight: inFlightPieceIds.has(piece.id),
-          top,
-        };
-      }),
-      {
-        viewportHeight,
-        viewportMarginPx: 200,
-        belowPx: LOOKAHEAD_BELOW_PX,
-        maxPieces: LOOKAHEAD_MAX_PIECES,
-      },
+      allPieces.map((piece) => ({
+        id: piece.id,
+        isTranslated: piece.isTranslated,
+        inFlight: inFlightPieceIds.has(piece.id),
+        inLookaheadBand: observer.isInLookaheadBand(piece.parentElement),
+      })),
+      { maxPieces: LOOKAHEAD_MAX_PIECES },
     ),
   );
 
@@ -1168,23 +1156,14 @@ function scheduleLookaheadPrefetch(): void {
  */
 function buildStatusResponse(): StatusResponse {
   const pageState = getPageState();
-  const viewportHeight =
-    typeof window !== 'undefined' ? window.innerHeight : 800;
-
+  // FR-15: near-viewport membership is IntersectionObserver state, so a
+  // status poll never forces layout on large pages.
   const visiblePieceIds = collectNearViewportPieceIds(
     allPieces.map((p) => ({
       id: p.id,
       isTranslated: p.isTranslated,
-      getRect: () => {
-        try {
-          const rect = p.parentElement.getBoundingClientRect();
-          return { top: rect.top, bottom: rect.bottom };
-        } catch {
-          return { top: Number.POSITIVE_INFINITY, bottom: Number.POSITIVE_INFINITY };
-        }
-      },
+      isNear: () => viewportObserver?.isNearViewport(p.parentElement) ?? false,
     })),
-    { marginPx: 200, viewportHeight },
   );
 
   const result = computeTranslationStatus({
@@ -1204,8 +1183,32 @@ function buildStatusResponse(): StatusResponse {
   };
 }
 
-/** Broadcast current status to popup + update in-page mini progress (FR-25). */
+/** FR-15: minimum spacing between status broadcasts (leading + trailing). */
+const STATUS_THROTTLE_MS = 250;
+let statusTimer: ReturnType<typeof setTimeout> | null = null;
+let statusDirty = false;
+
+/**
+ * Throttled status broadcast: the first call in a window broadcasts at once,
+ * later calls collapse into one trailing broadcast of the latest state.
+ */
 function sendStatusUpdate(): void {
+  if (statusTimer) {
+    statusDirty = true;
+    return;
+  }
+  broadcastStatus();
+  statusTimer = setTimeout(() => {
+    statusTimer = null;
+    if (statusDirty) {
+      statusDirty = false;
+      sendStatusUpdate();
+    }
+  }, STATUS_THROTTLE_MS);
+}
+
+/** Broadcast current status to popup + update in-page mini progress (FR-25). */
+function broadcastStatus(): void {
   const status = buildStatusResponse();
   // tabId is resolved by receivers via sender.tab.id (content scripts cannot
   // read their own tab id). Popup filters statusUpdate by that origin tab so
@@ -1537,6 +1540,8 @@ async function startTranslationUnlocked(): Promise<void> {
       void translatePieces(prioritized);
     },
     100,
+    undefined,
+    LOOKAHEAD_BELOW_PX,
   );
 
   // Observe all pieces (after resume so restored pieces skip LLM)
@@ -1906,6 +1911,10 @@ function destroyZombie(): void {
     try { viewportObserver.disconnect(); } catch { /* noop */ }
     viewportObserver = null;
   }
+  if (statusTimer) {
+    clearTimeout(statusTimer);
+    statusTimer = null;
+  }
   if (mutationWatcher) {
     try { mutationWatcher.stop(); } catch { /* noop */ }
     mutationWatcher = null;
@@ -1964,6 +1973,7 @@ export const __contentTranslationTestHooks = {
   startTranslation,
   getActiveRequests: () => activeRequests,
   isSystemicPaused: () => systemicPause,
+  sendStatusUpdate,
   getPieceCount: () => allPieces.length,
   stopTranslationAsync,
   destroyZombie,

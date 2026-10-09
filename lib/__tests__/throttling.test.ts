@@ -75,27 +75,25 @@ describe('adaptiveBatching / lookaheadPrefetch', () => {
       }),
     ).toBe(true);
 
-    // selectLookaheadCandidates picks below-fold pieces, caps count, empty when none
+    // selectLookaheadCandidates picks look-ahead-band pieces in order, caps count (FR-15:
+    // band membership comes from IntersectionObserver state, not geometry)
     const ids = selectLookaheadCandidates(
       [
-        { id: 'vis', isTranslated: false, inFlight: false, top: 100 },
-        { id: 'margin', isTranslated: false, inFlight: false, top: 900 }, // within 800+200
-        { id: 'next1', isTranslated: false, inFlight: false, top: 1200 },
-        { id: 'next2', isTranslated: false, inFlight: false, top: 1400 },
-        { id: 'next3', isTranslated: false, inFlight: false, top: 1600 },
-        { id: 'far', isTranslated: false, inFlight: false, top: 5000 },
-        { id: 'done', isTranslated: true, inFlight: false, top: 1300 },
-        { id: 'busy', isTranslated: false, inFlight: true, top: 1350 },
+        { id: 'vis', isTranslated: false, inFlight: false, inLookaheadBand: false },
+        { id: 'next1', isTranslated: false, inFlight: false, inLookaheadBand: true },
+        { id: 'done', isTranslated: true, inFlight: false, inLookaheadBand: true },
+        { id: 'busy', isTranslated: false, inFlight: true, inLookaheadBand: true },
+        { id: 'next2', isTranslated: false, inFlight: false, inLookaheadBand: true },
+        { id: 'next3', isTranslated: false, inFlight: false, inLookaheadBand: true },
       ],
-      { viewportHeight: 800, viewportMarginPx: 200, belowPx: 900, maxPieces: 2 },
+      { maxPieces: 2 },
     );
-    // next1/next2 are in (1000, 1700); far is outside; margin is inside IO margin
     expect(ids).toEqual(['next1', 'next2']);
 
     expect(
       selectLookaheadCandidates(
-        [{ id: 'a', isTranslated: false, inFlight: false, top: 50 }],
-        { viewportHeight: 800 },
+        [{ id: 'a', isTranslated: false, inFlight: false, inLookaheadBand: false }],
+        {},
       ),
     ).toEqual([]);
   });

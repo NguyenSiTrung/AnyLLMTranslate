@@ -151,3 +151,12 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Patterns: the descendant direction (`el.contains(parent)`) is an index probe over `el.querySelectorAll('*')` — O(subtree), same shadow-boundary semantics as `contains`.
   - Context: lint baseline is now 37 (the removed subsumption loop carried a non-null assertion).
 ---
+
+## [2026-10-09] - Phase 4 Task 3: Throttled, layout-free status (FR-15)
+- **Implemented:** `ViewportObserver` gains two membership IntersectionObservers (near = VIEWPORT_MARGIN, ahead = `0 0 900px 0`) that, unlike the dispatch IO, keep watching after dispatch; `isNearViewport(el)` / `isInLookaheadBand(el)` read their Sets. `buildStatusResponse` and `scheduleLookaheadPrefetch` use them instead of `getBoundingClientRect`. `sendStatusUpdate` is leading + trailing throttled at 250 ms (`broadcastStatus` does the work); the timer is cleared in `destroyZombie`.
+- **Files changed:** content/viewportObserver.ts, lib/lookaheadPrefetch.ts, lib/webTranslateStatus.ts, entrypoints/content.ts, content/__tests__/observers.test.ts, content/__tests__/webTranslateLifecycle.test.ts, lib/__tests__/throttling.test.ts, lib/__tests__/webResume.test.ts
+- **Learnings:**
+  - Gotchas: existing observer tests take the dispatch IO as `MockIntersectionObserver.instances.at(-1)`, so the dispatch IO is constructed last.
+  - Patterns: membership is tracked per target with a piece Set so `unobserve` (FR-13) detaches the membership IOs once the last piece on a target goes — no detached-target leak.
+  - Context: `redispatchVisible` still reads geometry; Task 5.5 can switch it to `nearTargets`.
+---

@@ -325,23 +325,13 @@ describe('webTranslateStatus', () => {
     expect(formatProgressLabel(err, 'Pool exhausted')).toBe('Translation Error');
   });
 
-  it('collectNearViewportPieceIds includes margin and excludes translated/far pieces', () => {
+  it('collectNearViewportPieceIds keeps untranslated near pieces only (IO membership, FR-15)', () => {
     expect([
-      ...collectNearViewportPieceIds(
-        [
-          { id: 'in', isTranslated: false, getRect: () => ({ top: 100, bottom: 200 }) },
-          { id: 'below', isTranslated: false, getRect: () => ({ top: 2000, bottom: 2100 }) },
-          { id: 'done', isTranslated: true, getRect: () => ({ top: 50, bottom: 80 }) },
-        ],
-        { marginPx: 200, viewportHeight: 800 },
-      ),
+      ...collectNearViewportPieceIds([
+        { id: 'in', isTranslated: false, isNear: () => true },
+        { id: 'below', isTranslated: false, isNear: () => false },
+        { id: 'done', isTranslated: true, isNear: () => true },
+      ]),
     ]).toEqual(['in']);
-
-    expect(
-      collectNearViewportPieceIds(
-        [{ id: 'above', isTranslated: false, getRect: () => ({ top: -150, bottom: -50 }) }],
-        { marginPx: 200, viewportHeight: 800 },
-      ).has('above'),
-    ).toBe(true);
   });
 });

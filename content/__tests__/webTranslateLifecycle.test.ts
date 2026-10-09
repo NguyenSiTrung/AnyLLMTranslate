@@ -317,6 +317,8 @@ describe('webTranslateLifecycle', () => {
           this.releaseAll = vi.fn();
           this.setPaused = vi.fn();
           this.unobserve = vi.fn();
+          this.isNearViewport = vi.fn(() => false);
+          this.isInLookaheadBand = vi.fn(() => false);
         }),
       }));
       vi.doMock('@/content/mutationWatcher', () => ({
@@ -1189,6 +1191,54 @@ describe('webTranslateLifecycle', () => {
         }
         expect(vi.mocked(display.removePieceArtifacts).mock.calls).toEqual([['big-42', edited.parentElement]]);
         expect(testHooks.getPieceCount()).toBe(4999);
+      });
+    });
+
+    describe('FR-15: throttled, layout-free status', () => {
+      it('20 rapid status triggers broadcast at most twice and never read layout', async () => {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const { ViewportObserver } = await import('@/content/viewportObserver');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [],
+          enableWebResume: false,
+        }));
+        document.body.innerHTML = '<main><p>One</p><p>Two</p></main>';
+        const [p1, p2] = [...document.querySelectorAll('p')];
+        vi.mocked(extractPieces).mockReturnValueOnce([
+          { id: 's1', text: 'One', sourceText: 'One', parentElement: p1, textNodes: [p1.firstChild as Text], isTranslated: false, inArticleContext: false },
+          { id: 's2', text: 'Two', sourceText: 'Two', parentElement: p2, textNodes: [p2.firstChild as Text], isTranslated: false, inArticleContext: false },
+        ] as never);
+        await testHooks.startTranslation();
+        const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
+          isNearViewport: Mock<(el: Element) => boolean>;
+        };
+        observer.isNearViewport.mockImplementation((el) => el === p1);
+        // Let the start-up status window close before counting.
+        await new Promise((r) => setTimeout(r, 300));
+
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockClear();
+        const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        try {
+          for (let i = 0; i < 20; i++) testHooks.sendStatusUpdate();
+          vi.advanceTimersByTime(1000);
+        } finally {
+          vi.useRealTimers();
+        }
+        const broadcasts = sendMessage.mock.calls.filter(([m]) => m?.action === 'statusUpdate');
+        expect(broadcasts.length).toBeGreaterThanOrEqual(1);
+        expect(broadcasts.length).toBeLessThanOrEqual(2);
+        expect(rectSpy).not.toHaveBeenCalled();
+        rectSpy.mockRestore();
+        // Near-viewport membership came from the observer (p1 near, p2 not).
+        const last = broadcasts.at(-1)![0] as unknown as { status: { visiblePending?: number } };
+        expect(last.status.visiblePending).toBe(1);
       });
     });
 

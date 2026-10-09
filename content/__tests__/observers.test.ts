@@ -239,6 +239,39 @@ describe('ViewportObserver', () => {
     pausedObserver.disconnect();
   });
 
+  it('FR-15: tracks near-viewport and look-ahead membership from IntersectionObserver entries', () => {
+    const observer = new ViewportObserver(vi.fn(), 50, 16, 900);
+    const [nearIO, aheadIO, dispatchIO] = MockIntersectionObserver.instances.slice(-3);
+    const p = document.createElement('p');
+    const q = document.createElement('p');
+    document.body.append(p, q);
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
+    observer.observe(makePiece('p', p));
+    observer.observe(makePiece('q', q));
+    expect(nearIO.observed.has(p) && aheadIO.observed.has(q)).toBe(true);
+
+    nearIO.fire(p, true);
+    aheadIO.fire(p, true);
+    aheadIO.fire(q, true);
+    expect(observer.isNearViewport(p)).toBe(true);
+    expect(observer.isInLookaheadBand(p)).toBe(false); // near wins
+    expect(observer.isInLookaheadBand(q)).toBe(true);
+
+    // Dispatch unobserves from the dispatch IO only — membership stays live.
+    dispatchIO.fire(p, true);
+    nearIO.fire(p, false);
+    expect(observer.isNearViewport(p)).toBe(false);
+    rectSpy.mockClear();
+    observer.isNearViewport(q);
+    observer.isInLookaheadBand(q);
+    expect(rectSpy).not.toHaveBeenCalled();
+    rectSpy.mockRestore();
+
+    observer.disconnect();
+    expect(observer.isInLookaheadBand(q)).toBe(false);
+    expect(nearIO.observed.size + aheadIO.observed.size).toBe(0);
+  });
+
   it('FR-13: unobserve releases pieces fully across 1,000 detach/append cycles', () => {
     const onVisible = vi.fn();
     const observer = new ViewportObserver(onVisible, 50);
@@ -262,6 +295,9 @@ describe('ViewportObserver', () => {
 
     expect(observer.observedCount).toBe(1);
     expect([...mock.observed]).toEqual([shared]);
+    for (const io of MockIntersectionObserver.instances.slice(-3, -1)) {
+      expect([...io.observed]).toEqual([shared]);
+    }
     mock.fire(shared, true);
     vi.advanceTimersByTime(50);
     expect(onVisible.mock.calls.flatMap((c) => c[0])).toEqual([keep]);

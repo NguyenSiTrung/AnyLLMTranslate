@@ -13,6 +13,16 @@ export type OnVisibleCallback = (pieces: TranslationPiece[]) => void;
  *  the next batch window (progressive chunked display). */
 export const DEFAULT_MAX_BATCH_PIECES = 16;
 
+/** How far below the fold the look-ahead band reaches (px). */
+export const DEFAULT_LOOKAHEAD_PX = 900;
+
+function trackMembership(entries: IntersectionObserverEntry[], into: Set<Element>): void {
+  for (const entry of entries) {
+    if (entry.isIntersecting) into.add(entry.target);
+    else into.delete(entry.target);
+  }
+}
+
 export class ViewportObserver {
   private observer: IntersectionObserver;
   private pieceMap: Map<Element, TranslationPiece[]> = new Map();
@@ -26,15 +36,36 @@ export class ViewportObserver {
   private paused = false;
   /** Cap on pieces dispatched per flush (progressive chunked display). */
   private maxBatchPieces: number;
+  /**
+   * FR-15: membership observers. Unlike the dispatch IO they keep watching a
+   * target after dispatch, so status and look-ahead read IO state instead of
+   * forcing layout with getBoundingClientRect.
+   */
+  private nearObserver: IntersectionObserver;
+  private aheadObserver: IntersectionObserver;
+  private nearTargets = new Set<Element>();
+  private aheadTargets = new Set<Element>();
+  /** Pieces per target that keep the membership observers attached. */
+  private trackedPieces = new Map<Element, Set<TranslationPiece>>();
 
   constructor(
     onVisible: OnVisibleCallback,
     batchDelayMs = 100,
     maxBatchPieces = DEFAULT_MAX_BATCH_PIECES,
+    lookaheadPx = DEFAULT_LOOKAHEAD_PX,
   ) {
     this.onVisible = onVisible;
     this.batchDelayMs = batchDelayMs;
     this.maxBatchPieces = maxBatchPieces;
+
+    this.nearObserver = new IntersectionObserver(
+      (entries) => trackMembership(entries, this.nearTargets),
+      { rootMargin: VIEWPORT_MARGIN },
+    );
+    this.aheadObserver = new IntersectionObserver(
+      (entries) => trackMembership(entries, this.aheadTargets),
+      { rootMargin: `0px 0px ${lookaheadPx}px 0px` },
+    );
 
     this.observer = new IntersectionObserver(
       (entries) => {
@@ -107,6 +138,7 @@ export class ViewportObserver {
   /** Observe a translation piece */
   observe(piece: TranslationPiece): void {
     if (piece.isTranslated) return;
+    this.track(piece);
     // Already handed off to translatePieces — do not re-observe until release.
     if (this.dispatchedIds.has(piece.id)) return;
 
@@ -129,6 +161,7 @@ export class ViewportObserver {
    * from dispatch state, so nothing keeps the detached subtree alive.
    */
   unobserve(piece: TranslationPiece): void {
+    this.untrack(piece);
     this.dispatchedIds.delete(piece.id);
     if (this.pendingPieces.includes(piece)) {
       this.pendingPieces = this.pendingPieces.filter((p) => p !== piece);
@@ -145,6 +178,41 @@ export class ViewportObserver {
     this.observer.unobserve(target);
   }
 
+  /** FR-15: whether `el` is within the dispatch margin (IO state, no layout read). */
+  isNearViewport(el: Element): boolean {
+    return this.nearTargets.has(el);
+  }
+
+  /** FR-15: whether `el` is below the near margin but inside the look-ahead band. */
+  isInLookaheadBand(el: Element): boolean {
+    return this.aheadTargets.has(el) && !this.nearTargets.has(el);
+  }
+
+  private track(piece: TranslationPiece): void {
+    const target = piece.parentElement;
+    const pieces = this.trackedPieces.get(target);
+    if (pieces) {
+      pieces.add(piece);
+      return;
+    }
+    this.trackedPieces.set(target, new Set([piece]));
+    this.nearObserver.observe(target);
+    this.aheadObserver.observe(target);
+  }
+
+  private untrack(piece: TranslationPiece): void {
+    const target = piece.parentElement;
+    const pieces = this.trackedPieces.get(target);
+    if (!pieces) return;
+    pieces.delete(piece);
+    if (pieces.size > 0) return;
+    this.trackedPieces.delete(target);
+    this.nearObserver.unobserve(target);
+    this.aheadObserver.unobserve(target);
+    this.nearTargets.delete(target);
+    this.aheadTargets.delete(target);
+  }
+
   /** Observe multiple pieces */
   observeAll(pieces: TranslationPiece[]): void {
     for (const piece of pieces) {
@@ -155,6 +223,11 @@ export class ViewportObserver {
   /** Stop observing all elements */
   disconnect(): void {
     this.observer.disconnect();
+    this.nearObserver.disconnect();
+    this.aheadObserver.disconnect();
+    this.trackedPieces.clear();
+    this.nearTargets.clear();
+    this.aheadTargets.clear();
     this.pieceMap.clear();
     this.pendingPieces = [];
     this.dispatchedIds.clear();

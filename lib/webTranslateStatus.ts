@@ -152,24 +152,15 @@ export function formatProgressDetail(
 }
 
 /**
- * Collect piece ids whose parent is near the viewport (margin matches VIEWPORT_MARGIN ~200px).
- * Injectable geometry for unit tests.
+ * Collect untranslated piece ids whose parent is near the viewport. `isNear`
+ * reads IntersectionObserver membership (FR-15), never layout.
  */
 export function collectNearViewportPieceIds(
-  pieces: Array<{ id: string; isTranslated: boolean; getRect: () => { top: number; bottom: number } }>,
-  options?: { marginPx?: number; viewportHeight?: number },
+  pieces: Array<{ id: string; isTranslated: boolean; isNear: () => boolean }>,
 ): Set<string> {
-  const marginPx = options?.marginPx ?? 200;
-  const viewportHeight = options?.viewportHeight ?? 800;
   const ids = new Set<string>();
-
   for (const piece of pieces) {
-    if (piece.isTranslated) continue;
-    const rect = piece.getRect();
-    const near =
-      rect.bottom >= -marginPx && rect.top <= viewportHeight + marginPx;
-    if (near) ids.add(piece.id);
+    if (!piece.isTranslated && piece.isNear()) ids.add(piece.id);
   }
-
   return ids;
 }
