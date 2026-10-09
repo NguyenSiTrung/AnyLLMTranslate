@@ -36,12 +36,13 @@ Each task is TDD: write the failing test → implement → run the affected suit
 <!-- files: content/translationDisplay.ts, styles/, related tests -->
 
 - [x] Task 2.1: Append-only LI/TD/TH insertion (FR-7)
-  - [ ] Test: after translating an LI with held child references, `li.removeChild(child)` succeeds in dual and translation-only modes; original children keep their parent; translation-only hides originals via CSS; legacy `ORIGINAL_WRAPPER_ATTR` pages still restore cleanly
-  - [ ] Implement in `insertIntoContainedElement` / `getInlineRenderTarget` / `removeAllTranslations` plus scoped CSS in `styles/`
+  - [x] Test: after translating an LI with held child references, `li.removeChild(child)` succeeds in dual and translation-only modes; original children keep their parent; translation-only hides originals via CSS; legacy `ORIGINAL_WRAPPER_ATTR` pages still restore cleanly
+  - [x] Implement in `insertIntoContainedElement` / `getInlineRenderTarget` / `removeAllTranslations` plus scoped CSS in `styles/`
 - [x] Task 2.2: Debounce translation-only inline copy sync (FR-8)
   - [x] Test: N inline placeholders in translation-only mode cause one sync pass (spy), and clones still appear
   - [x] Switch `showInlineLoadingPlaceholder` to `debouncedSyncInlineSiblings`
-- [ ] Task: Automated phase gate 'Phase 2: Display safety' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
+<!-- gate 2026-10-09: tsc 0; lint 38 (baseline); pnpm test 762/763 — sole red is known flake services/__tests__/background.streamStats.test.ts (workflow.md; 1/3 isolated reruns green, services/ untouched) -->
+- [x] Task: Automated phase gate 'Phase 2: Display safety' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
 
 ## Phase 3: Cost and reliability
 <!-- depends: phase1, phase2 -->

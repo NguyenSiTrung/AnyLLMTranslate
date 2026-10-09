@@ -90,3 +90,9 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: `scheduleDomWrite` batched into one rAF but queued duplicates, so "debounced" sync still ran N times per frame — identity dedupe in the queue was the actual fix.
   - Patterns: rAF-debounce tests go in their own file with `vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })` + `advanceTimersToNextFrame()`; module-level queue state from earlier tests in the same file can leave a real rAF pending.
 ---
+
+## [2026-10-09] - Phase 2 gate: Display safety
+- **Result:** tsc 0; lint 38 (baseline); pnpm test 762/763.
+- **Learnings:**
+  - Gotchas: this run's flake was `background.streamStats.test.ts` (dedupe case, `expected undefined to be defined`), failing 2/3 isolated reruns with no `services/` diff — matches the workflow.md load-sensitive class, not a regression.
+---
