@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { extractPieces, resetPieceCounter } from '../domWalker';
+import { extractPieces, resetPieceCounter, splitAtSentenceBoundary } from '../domWalker';
 import { joinGroupText } from '../pieceText';
 import { __resetMatchCacheForTest } from '@/lib/domUtils';
 import { decodeInlineHtml } from '@/lib/richTranslate';
@@ -114,5 +114,64 @@ describe('domWalker — code blocks skipped by default smart excludes (FR-4)', (
     );
     const pieces = extractPieces(document.body, { excludeSelectors: [...SMART_EXCLUDE_SELECTORS] });
     expect(pieces.map((p) => p.text)).toEqual(['Run npm test before pushing.']);
+  });
+});
+
+/** Open/close balance of `<z>` tokens; every prefix must stay >= 0. */
+function zBalance(text: string): number {
+  let depth = 0;
+  for (const m of text.matchAll(/<z id="\d+">|<\/z>/g)) {
+    depth += m[0] === '</z>' ? -1 : 1;
+    if (depth < 0) return -1;
+  }
+  return depth;
+}
+
+describe('domWalker — CJK-aware, tag-safe sentence splitting (FR-5)', () => {
+  it('splits a long Chinese paragraph only at CJK sentence punctuation', () => {
+    const sentences = Array.from({ length: 90 }, (_, i) =>
+      `这是第${i}个用于测试的中文句子包含足够的文字${'！？；。'[i % 4]}`,
+    );
+    const paragraph = sentences.join('');
+    expect(paragraph.length).toBeGreaterThan(2000);
+
+    const parts = splitAtSentenceBoundary(paragraph, 1000);
+    expect(parts.length).toBeGreaterThan(1);
+    expect(parts.join('')).toBe(paragraph);
+    for (const part of parts.slice(0, -1)) {
+      expect(part.length).toBeLessThanOrEqual(1000);
+      expect('。！？；').toContain(part.at(-1));
+    }
+  });
+
+  it('never cuts inside a <z> token and keeps every part balanced', () => {
+    // Long link with words but no sentence punctuation: the cut lands inside the element.
+    const words = Array.from({ length: 300 }, (_, i) => `word${i}`).join(' ');
+    let parts = splitAtSentenceBoundary(`Lead <z id="0">${words}</z> tail`, 1000);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) {
+      expect(zBalance(part)).toBe(0);
+      expect(part).not.toMatch(/<z(?! id="\d+">)|<\/(?!z>)|<z id="\d*$/);
+    }
+    expect(parts[1].startsWith('<z id="0">')).toBe(true);
+
+    // No whitespace at all: a forced cut would land inside the open token.
+    parts = splitAtSentenceBoundary(`${'x'.repeat(995)}<z id="7">${'y'.repeat(50)}</z>`, 1000);
+    expect(parts[0]).toBe('x'.repeat(995));
+    expect(parts[1]).toBe(`<z id="7">${'y'.repeat(50)}</z>`);
+  });
+
+  it('splits a long rich piece into balanced, decodable parts', () => {
+    const body = Array.from({ length: 40 }, (_, i) =>
+      `Sentence ${i} mentions <a href="#${i}">link number ${i}</a> and <b>bold ${i} words</b> here.`,
+    ).join(' ');
+    setBody(`<p>${body}</p>`);
+    const pieces = extractPieces(document.body, { enableRichTranslate: true });
+    expect(pieces.length).toBeGreaterThan(1);
+    for (const piece of pieces) {
+      expect(zBalance(piece.text)).toBe(0);
+      const frag = decodeInlineHtml(piece.text, piece.variables ?? []);
+      expect(frag.textContent).not.toMatch(/<\/?z/);
+    }
   });
 });

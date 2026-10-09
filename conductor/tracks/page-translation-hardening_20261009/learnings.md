@@ -52,3 +52,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Context: smart excludes are merged in `translatePage` (`entrypoints/content.ts`), so a walker test with `excludeSelectors: [...SMART_EXCLUDE_SELECTORS]` is the faithful default-settings check. Avoided `.highlight` — some sites use it on prose.
 ---
+
+## [2026-10-09] - Phase 1 Task 1.5: CJK-aware, tag-safe splitting (FR-5)
+- **Implemented:** `splitAtSentenceBoundary` (now exported) picks cuts via `SENTENCE_END_RE` (ASCII `.?!`+space, `。！？；｡．`, `\n`), falls back to whitespace outside `<z>` tokens, then a forced cut moved back before any token (`tagSafeCut`). `balanceZTags` closes open `<z>` at each part end and reopens them at the next part start; tag-only parts are dropped.
+- **Files changed:** content/domWalker.ts, content/__tests__/domWalker.hardening.test.ts
+- **Learnings:**
+  - Gotchas: never call `.test()` on a shared `/g` regex — `lastIndex` persists between calls, so the second call can return false. Use `matchAll`/`replace` (stateless) or `includes`.
+  - Patterns: a split link becomes two `<a>` elements with the same attributes — acceptable, and each part decodes independently.
+---

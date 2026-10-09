@@ -21,9 +21,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 1.4: Skip code blocks by default (FR-4)
   - [x] Test: `<pre>` on a host without site rules is not extracted with default settings; inline `code` stays in the parent piece
   - [x] Add `pre` (and block code containers) to `SMART_EXCLUDE_SELECTORS` in `types/config.ts`
-- [ ] Task 1.5: CJK-aware, tag-safe splitting (FR-5)
-  - [ ] Test: long Chinese paragraph splits only at `。！？；`; rich piece >1000 chars never cuts inside `<z id="N">`/`</z>` and each part has balanced tags
-  - [ ] Implement in `splitAtSentenceBoundary` (`domWalker.ts:106`)
+- [x] Task 1.5: CJK-aware, tag-safe splitting (FR-5)
+  - [x] Test: long Chinese paragraph splits only at `。！？；`; rich piece >1000 chars never cuts inside `<z id="N">`/`</z>` and each part has balanced tags
+  - [x] Implement in `splitAtSentenceBoundary` (`domWalker.ts:106`)
 - [ ] Task 1.6: Visually-block custom elements split pieces (FR-6)
   - [ ] Test: two sibling `<x-card>` elements with text under one `<div>` become two pieces; `span` with computed `display:block` splits; standard inline tags never call `getComputedStyle`
   - [ ] Implement `isBlockElement` fallback with per-walk cache

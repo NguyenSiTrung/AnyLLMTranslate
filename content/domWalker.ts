@@ -102,46 +102,85 @@ function isBlockElement(element: Element): boolean {
   return false;
 }
 
-/** Split text at sentence boundaries near the limit */
-function splitAtSentenceBoundary(text: string, maxChars: number): string[] {
+/** Rich placeholder tokens (`<z id="N">` / `</z>`) — never cut inside one. */
+const Z_TOKEN_RE = /<z id="\d+">|<\/z>/g;
+/**
+ * FR-5: sentence ends, as the index of the last char a part keeps — ASCII
+ * `.?!` followed by whitespace, CJK/fullwidth `。！？；｡．` (no space needed),
+ * or a newline.
+ */
+const SENTENCE_END_RE = /[.?!](?=\s)|[。！？；｡．]|\n/g;
+
+/** Largest cut (slice end) <= limit that does not fall inside a `<z>` token. */
+function tagSafeCut(text: string, cut: number): number {
+  for (const m of text.matchAll(Z_TOKEN_RE)) {
+    const start = m.index ?? 0;
+    if (start >= cut) break;
+    if (cut < start + m[0].length) return start;
+  }
+  return cut;
+}
+
+/** Pick the end of the next part of `text` (which is longer than maxChars). */
+function findCut(text: string, maxChars: number): number {
+  const floor = maxChars * 0.3;
+  let sentenceCut = -1;
+  for (const m of text.matchAll(SENTENCE_END_RE)) {
+    const cut = (m.index ?? 0) + 1;
+    if (cut > maxChars) break;
+    sentenceCut = cut;
+  }
+  if (sentenceCut > floor) return sentenceCut;
+
+  // No good sentence boundary — break at the last whitespace outside a token.
+  const segment = text.slice(0, maxChars);
+  for (let i = segment.length - 1; i > floor; i--) {
+    if (/\s/.test(segment[i]) && tagSafeCut(text, i) === i) return i;
+  }
+
+  // Force break, moved back before any token it would split.
+  const forced = tagSafeCut(text, maxChars);
+  return forced > 0 ? forced : maxChars;
+}
+
+/**
+ * FR-5: re-balance `<z>` tags across parts — close whatever a part leaves
+ * open and reopen it at the start of the next part, so each part decodes on
+ * its own. Parts left with no text outside tokens are dropped.
+ */
+function balanceZTags(parts: string[]): string[] {
+  const balanced: string[] = [];
+  let open: string[] = [];
+  for (const part of parts) {
+    const prefix = open.join('');
+    for (const m of part.matchAll(Z_TOKEN_RE)) {
+      if (m[0] === '</z>') open.pop();
+      else open.push(m[0]);
+    }
+    const text = prefix + part + '</z>'.repeat(open.length);
+    if (text.replace(Z_TOKEN_RE, '').trim()) balanced.push(text);
+  }
+  return balanced;
+}
+
+/** Split text at sentence boundaries near the limit (CJK-aware, `<z>`-safe). */
+export function splitAtSentenceBoundary(text: string, maxChars: number): string[] {
   if (text.length <= maxChars) return [text];
 
   const parts: string[] = [];
   let remaining = text;
 
   while (remaining.length > maxChars) {
-    // Try to find a sentence boundary near maxChars
-    const segment = remaining.slice(0, maxChars);
-    const lastPeriod = segment.lastIndexOf('. ');
-    const lastQuestion = segment.lastIndexOf('? ');
-    const lastExclaim = segment.lastIndexOf('! ');
-    const lastNewline = segment.lastIndexOf('\n');
-
-    const breakPoint = Math.max(lastPeriod, lastQuestion, lastExclaim, lastNewline);
-
-    if (breakPoint > maxChars * 0.3) {
-      // Found a good sentence boundary
-      parts.push(remaining.slice(0, breakPoint + 1).trim());
-      remaining = remaining.slice(breakPoint + 1).trim();
-    } else {
-      // No good boundary — break at word boundary
-      const lastSpace = segment.lastIndexOf(' ');
-      if (lastSpace > maxChars * 0.3) {
-        parts.push(remaining.slice(0, lastSpace).trim());
-        remaining = remaining.slice(lastSpace).trim();
-      } else {
-        // Force break
-        parts.push(remaining.slice(0, maxChars).trim());
-        remaining = remaining.slice(maxChars).trim();
-      }
-    }
+    const cut = findCut(remaining, maxChars);
+    parts.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
   }
 
   if (remaining.trim()) {
     parts.push(remaining.trim());
   }
 
-  return parts;
+  return text.includes('<z id="') ? balanceZTags(parts) : parts;
 }
 
 /** Extract translatable pieces from a root element */
