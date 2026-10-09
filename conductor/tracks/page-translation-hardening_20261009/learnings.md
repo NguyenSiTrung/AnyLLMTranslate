@@ -112,3 +112,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: overloaded flags — `skipFailureCache` doubled as "user intent", so the silent auto retry cleared the banner and re-observed everything. Name intent separately from transport options.
   - Patterns: concurrency tests use per-id deferred `sendMessage` promises; a re-dispatch should resolve immediately so a regression fails on an assertion, not a 5 s timeout.
 ---
+
+## [2026-10-09] - Phase 3 Task 3: Live-text churn freeze (FR-11)
+- **Implemented:** `content/churnGuard.ts` (`ChurnGuard`: WeakMap of change timestamps + WeakSet of frozen elements, injectable clock). The mutation callback records each changed piece parent after `retirePiece` (which already removes the translation); on the 4th change in 60 s the parent is frozen and dropped from forced roots, normal roots and newly extracted pieces. Reset in `teardownPageTranslationSession` (Start and Stop).
+- **Files changed:** content/churnGuard.ts, content/__tests__/churnGuard.test.ts, entrypoints/content.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Gotchas: freezing must filter three paths — forced roots, normal roots (the watcher delivers the frozen element itself once its markers are gone) and extracted pieces whose parent is frozen.
+  - Patterns: lifecycle churn tests build each mocked piece from the live text node so `isPieceSourceUnchanged` sees the real detach on `textContent =`.
+---

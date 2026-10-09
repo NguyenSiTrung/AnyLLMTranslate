@@ -53,9 +53,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 3.2: Automatic retry never clears the pause (FR-9)
   - [x] Test: batch A enters the pause; batch B's automatic retry runs → pause and banner remain, nothing re-observed
   - [x] Split "user retry" from "automatic retry" options in `translatePieces`
-- [ ] Task 3.3: Live-text churn freeze (FR-11)
-  - [ ] Test: element changed 5×/60 s → ≤3 requests, then frozen; translation removed on freeze; reset on Stop/Start
-  - [ ] Implement a churn WeakMap in the mutation callback (`content.ts:1483+`)
+- [x] Task 3.3: Live-text churn freeze (FR-11)
+  - [x] Test: element changed 5×/60 s → ≤3 requests, then frozen; translation removed on freeze; reset on Stop/Start
+  - [x] Implement a churn WeakMap in the mutation callback (`content.ts:1483+`)
 - [ ] Task 3.4: Abortable non-streaming translate (FR-12)
   - [ ] Test (background): `restore` / `CANCEL_PAGE_TRANSLATE` aborts the per-tab controller; `handleTranslate` sees an aborted signal, no cache write, no failover
   - [ ] Test (content): Stop sends the cancel; late response writes nothing (existing session guard)

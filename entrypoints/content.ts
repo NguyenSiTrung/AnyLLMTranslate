@@ -8,6 +8,7 @@ import type { TranslationPiece } from '@/types/translation';
 import type { PageContext } from '@/types/config';
 import { extractPieces, type ExtractOptions } from '@/content/domWalker';
 import { joinGroupText } from '@/content/pieceText';
+import { ChurnGuard } from '@/content/churnGuard';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
 import {
@@ -259,6 +260,10 @@ function isPieceSourceUnchanged(piece: TranslationPiece): boolean {
   }
   return liveSourceText(piece.parentElement) === baseline;
 }
+
+/** FR-11: elements whose source churns (tickers, clocks) freeze for the
+ *  session; reset with the session in teardownPageTranslationSession. */
+const churnGuard = new ChurnGuard();
 
 /** sm7n: ids invalidated by source edits or detached pruning — late
  *  responses and placeholder passes must never apply to them. Cleared on
@@ -1331,6 +1336,7 @@ export async function startTranslation(): Promise<void> {
 }
 
 function teardownPageTranslationSession(): void {
+  churnGuard.reset();
   if (viewportObserver) {
     viewportObserver.disconnect();
     viewportObserver = null;
@@ -1545,10 +1551,18 @@ async function startTranslationUnlocked(): Promise<void> {
         if (markedHostDelivered) forcedRoots.add(parent);
         if (isPieceSourceUnchanged(piece)) continue;
         retirePiece(piece);
+        // FR-11: a churning element is frozen — its translation is already
+        // removed above and it is not re-extracted.
+        if (churnGuard.recordChange(parent)) continue;
         forcedRoots.add(parent);
       }
+      for (const root of forcedRoots) {
+        if (churnGuard.isFrozen(root)) forcedRoots.delete(root);
+      }
 
-      const normalRoots = addedElements.filter((el) => !forcedRoots.has(el));
+      const normalRoots = addedElements.filter(
+        (el) => !forcedRoots.has(el) && !churnGuard.isFrozen(el),
+      );
       const extracted = [
         ...normalRoots.flatMap((element) =>
           extractDynamicPieces(element, extractOptions),
@@ -1563,6 +1577,7 @@ async function startTranslationUnlocked(): Promise<void> {
       // parent+text can arrive twice under different ids. Keep the first.
       const seenKeys = new Set<string>();
       const newPieces = extracted.filter((piece) => {
+        if (churnGuard.isFrozen(piece.parentElement)) return false;
         const key = contentKeyForPiece(piece);
         if (seenKeys.has(key)) return false;
         seenKeys.add(key);

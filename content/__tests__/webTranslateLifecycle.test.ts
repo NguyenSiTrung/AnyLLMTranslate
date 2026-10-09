@@ -984,6 +984,69 @@ describe('webTranslateLifecycle', () => {
       });
     });
 
+    describe('FR-11: live-text churn freeze', () => {
+      it('re-translates at most 3 changes per 60 s, then freezes and removes the translation; Stop/Start resets', async () => {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const { MutationWatcher } = await import('@/content/mutationWatcher');
+        const { ViewportObserver } = await import('@/content/viewportObserver');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [],
+          enableWebResume: false,
+        }));
+        document.body.innerHTML = '<main><p id="ticker">Score 0</p></main>';
+        const ticker = document.getElementById('ticker')!;
+        let seq = 0;
+        const pieceFor = () => {
+          const node = ticker.firstChild as Text;
+          return {
+            id: `t-${seq++}`, text: node.data, sourceText: node.data,
+            parentElement: ticker, textNodes: [node], isTranslated: false,
+            inArticleContext: false,
+          };
+        };
+        vi.mocked(extractPieces).mockImplementation(() => [pieceFor()] as never);
+
+        const session = async () => {
+          await testHooks.startTranslation();
+          const onMutation = (vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[])[0] as (
+            added: Element[],
+          ) => void;
+          const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
+            observeAll: Mock<(pieces: Array<{ id: string; parentElement: Element }>) => void>;
+          };
+          observer.observeAll.mockClear();
+          const change = (n: number) => {
+            ticker.textContent = `Score ${n}`;
+            onMutation([ticker]);
+          };
+          const reobserved = () =>
+            observer.observeAll.mock.calls.filter(([ps]) => ps.some((p) => p.parentElement === ticker));
+          return { change, reobserved };
+        };
+
+        const first = await session();
+        vi.mocked(display.removePieceArtifacts).mockClear();
+        for (let n = 1; n <= 5; n++) first.change(n);
+        // Changes 1–3 re-translate; the 4th freezes; the 5th is ignored.
+        expect(first.reobserved()).toHaveLength(3);
+        // Each of changes 1–4 retires the previous piece — the 4th removes the
+        // last translation so stale text cannot mislead.
+        expect(vi.mocked(display.removePieceArtifacts).mock.calls.map((c) => c[0])).toEqual([
+          't-0', 't-1', 't-2', 't-3',
+        ]);
+
+        await testHooks.stopTranslationAsync();
+        const second = await session();
+        second.change(6);
+        expect(second.reobserved()).toHaveLength(1);
+      });
+    });
+
     it('bedw: marked back-fill shows incomplete error; a genuine source echo still applies', async () => {
       // Regression: back-fill detection must use the explicit `backfilled`
       // marker, not `partial && translatedText === piece.text` — the latter
