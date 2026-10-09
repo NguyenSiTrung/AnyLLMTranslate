@@ -96,3 +96,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Gotchas: this run's flake was `background.streamStats.test.ts` (dedupe case, `expected undefined to be defined`), failing 2/3 isolated reruns with no `services/` diff — matches the workflow.md load-sensitive class, not a regression.
 ---
+
+## [2026-10-09] - Phase 3 Task 1: Retry classifier and pause rules (FR-10)
+- **Implemented:** `lib/webTranslateRetry.ts` — `isRetryableWebTranslationError` (408/429/5xx/network/timeout/parse/pool; never 401/402/403/key/quota/billing) and `isProviderPauseError` (auth/quota + pool/rate-limit). content.ts uses them for all three auto-retry sites and the pause; `isTransientTranslationError` is negative-cache-only again.
+- **Files changed:** lib/webTranslateRetry.ts, lib/__tests__/webTranslateRetry.test.ts, entrypoints/content.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Gotchas: `vi.doMock` factory spies in webTranslateLifecycle's FR-1b block survive `vi.resetModules()` across tests — `mockClear()` notification/display spies before counting calls.
+  - Patterns: auth/quota check runs first in the retry classifier so a pool-exhaustion wrapper ("All providers failed: 401") pauses instead of retrying.
+---

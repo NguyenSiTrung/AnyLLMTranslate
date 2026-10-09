@@ -839,6 +839,64 @@ describe('webTranslateLifecycle', () => {
       expect(piece.translatedText).toBe(piece.text);
     });
 
+    describe('FR-10: retry and pause classification', () => {
+      async function runFailure(response: Record<string, unknown>) {
+        const display = await import('@/content/translationDisplay');
+        const notify = await import('@/content/autoTranslateNotification');
+        vi.mocked(notify.showSystemicPauseBanner).mockClear();
+        vi.mocked(display.setErrorState).mockClear();
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...defaultSettings(),
+          enableStreamingTranslation: false,
+        }));
+        const chrome = (globalThis as any).chrome;
+        chrome.runtime.sendMessage.mockImplementation(async (msg: any) =>
+          msg?.action === 'translate' ? response : {},
+        );
+        const piece = makePiece('p1', 'Hello world');
+        await testHooks.translatePieces([piece]);
+        const translateCalls = chrome.runtime.sendMessage.mock.calls.filter(
+          ([msg]: any[]) => msg?.action === 'translate',
+        );
+        return { display, notify, translateCalls };
+      }
+
+      it.each([
+        '401 Unauthorized',
+        'Invalid API key provided',
+        'You exceeded your current quota, please check your plan and billing details.',
+      ])('"%s" is not auto-retried and enters the pause with a settings link', async (error) => {
+        const { display, notify, translateCalls } = await runFailure({ success: false, error });
+        expect(translateCalls).toHaveLength(1);
+        expect(display.setErrorState).toHaveBeenCalledWith(
+          expect.anything(), 'p1', error, expect.any(Function),
+        );
+        expect(notify.showSystemicPauseBanner).toHaveBeenCalledTimes(1);
+        const banner = vi.mocked(notify.showSystemicPauseBanner).mock.calls[0][0];
+        expect(banner.message).toBe(error);
+        expect(banner.onOpenSettings).toEqual(expect.any(Function));
+      });
+
+      it('a per-piece 403 failure is not auto-retried and pauses', async () => {
+        const { notify, translateCalls } = await runFailure({
+          success: true,
+          partial: true,
+          results: [],
+          failed: [{ id: 'p1', error: '403 Forbidden' }],
+        });
+        expect(translateCalls).toHaveLength(1);
+        expect(notify.showSystemicPauseBanner).toHaveBeenCalledTimes(1);
+      });
+
+      it.each(['503 Service Unavailable', 'HTTP 429 Too Many Requests', 'Failed to fetch'])(
+        '"%s" gets exactly one automatic retry',
+        async (error) => {
+          const { translateCalls } = await runFailure({ success: false, error });
+          expect(translateCalls).toHaveLength(2);
+        },
+      );
+    });
+
     it('bedw: marked back-fill shows incomplete error; a genuine source echo still applies', async () => {
       // Regression: back-fill detection must use the explicit `backfilled`
       // marker, not `partial && translatedText === piece.text` — the latter

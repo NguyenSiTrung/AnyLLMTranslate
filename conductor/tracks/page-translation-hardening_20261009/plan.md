@@ -47,9 +47,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 ## Phase 3: Cost and reliability
 <!-- depends: phase1, phase2 -->
 
-- [ ] Task 3.1: Retry classifier and pause rules (FR-10)
-  - [ ] Test: 401/403/"invalid api key"/quota → no automatic retry, enters the pause with a settings link; 429/503/network → one automatic retry
-  - [ ] Add `isRetryableWebTranslationError` (string-based, in `lib/`) and an auth/quota pause predicate; use them in `translatePieces`
+- [x] Task 3.1: Retry classifier and pause rules (FR-10)
+  - [x] Test: 401/403/"invalid api key"/quota → no automatic retry, enters the pause with a settings link; 429/503/network → one automatic retry
+  - [x] Add `isRetryableWebTranslationError` (string-based, in `lib/`) and an auth/quota pause predicate; use them in `translatePieces`
 - [ ] Task 3.2: Automatic retry never clears the pause (FR-9)
   - [ ] Test: batch A enters the pause; batch B's automatic retry runs → pause and banner remain, nothing re-observed
   - [ ] Split "user retry" from "automatic retry" options in `translatePieces`

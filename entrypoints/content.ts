@@ -68,7 +68,7 @@ import '@/styles/subtitle.css';
 import '@/styles/tooltip.css';
 import { isContextInvalidated } from '@/lib/utils';
 import { detectLanguage, isSameLanguage, SAME_LANG_SKIP_CONFIDENCE } from '@/lib/langDetect';
-import { isTransientTranslationError } from '@/lib/translationErrors';
+import { isProviderPauseError, isRetryableWebTranslationError } from '@/lib/webTranslateRetry';
 import {
   deriveContentHash,
   type ResumePiece,
@@ -294,13 +294,6 @@ function markContentHandled(piece: TranslationPiece): void {
 
 function isContentHandled(piece: TranslationPiece): boolean {
   return handledContentKeys.has(contentKeyForPiece(piece));
-}
-
-/** Pool/rate-limit style failures that should pause further scroll batches. */
-function isSystemicFailureMessage(message: string): boolean {
-  return /provider pool|all .* (failed|open)|rate.?limit|pool is empty|no providers/i.test(
-    message,
-  );
 }
 
 function openProvidersSettings(): void {
@@ -961,36 +954,37 @@ async function translatePieces(
       if (response.results.length > 0) {
         clearSystemicPause();
       }
-      // FR-4: per-piece failures — auto-retry transient ones once (often a
+      // FR-4: per-piece failures — auto-retry retryable ones once (often a
       // sibling batch already wrote the success cache); otherwise show error.
+      // FR-10: auth/key/quota/billing are never retried — they pause instead.
       if (response.failed && response.failed.length > 0) {
         const failedPieces: TranslationPiece[] = [];
-        let anyTransient = false;
+        let anyRetryable = false;
         for (const failure of response.failed) {
           const piece = workPieces.find((p) => p.id === failure.id);
           if (!piece || piece.isTranslated || !isPieceCurrent(piece)) continue;
           failedPieces.push(piece);
-          if (isTransientTranslationError(failure.error)) {
-            anyTransient = true;
+          if (isRetryableWebTranslationError(failure.error)) {
+            anyRetryable = true;
           }
         }
-        if (failedPieces.length > 0 && !autoRetriedOnce && anyTransient) {
+        if (failedPieces.length > 0 && !autoRetriedOnce && anyRetryable) {
           pendingAutoRetry = failedPieces;
         } else {
           for (const failure of response.failed) {
             const piece = workPieces.find((p) => p.id === failure.id);
             if (!piece || piece.isTranslated || !isPieceCurrent(piece)) continue;
             applyPieceError(piece, failure.error, compactInlineEnabled);
-            if (isSystemicFailureMessage(failure.error)) {
+            if (isProviderPauseError(failure.error)) {
               enterSystemicPause(failure.error);
             }
           }
         }
       }
     } else if (!response.success && response.error) {
-      // Silent one-shot auto-retry for transient pool/network failures so a
+      // Silent one-shot auto-retry for retryable pool/network failures so a
       // concurrent success-cache fill or brief blip doesn't force a manual click.
-      if (!autoRetriedOnce && isTransientTranslationError(response.error)) {
+      if (!autoRetriedOnce && isRetryableWebTranslationError(response.error)) {
         pendingAutoRetry = workPieces.filter((p) => !p.isTranslated && isPieceCurrent(p));
       } else {
         showTranslationErrorNotification(response.error);
@@ -998,7 +992,7 @@ async function translatePieces(
           if (!isPieceCurrent(piece)) continue;
           applyPieceError(piece, response.error, compactInlineEnabled);
         }
-        if (isSystemicFailureMessage(response.error)) {
+        if (isProviderPauseError(response.error)) {
           enterSystemicPause(response.error);
         }
       }
@@ -1008,7 +1002,7 @@ async function translatePieces(
       return;
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
-    if (!autoRetriedOnce && isTransientTranslationError(message)) {
+    if (!autoRetriedOnce && isRetryableWebTranslationError(message)) {
       pendingAutoRetry = workPieces.filter((p) => !p.isTranslated && isPieceCurrent(p));
     } else {
       showTranslationErrorNotification(message);
@@ -1016,7 +1010,7 @@ async function translatePieces(
         if (!isPieceCurrent(piece)) continue;
         applyPieceError(piece, message, compactInlineEnabled);
       }
-      if (isSystemicFailureMessage(message)) {
+      if (isProviderPauseError(message)) {
         enterSystemicPause(message);
       }
     }
