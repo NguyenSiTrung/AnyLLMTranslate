@@ -8,6 +8,7 @@ import type { TranslationPiece } from '@/types/translation';
 import type { PageContext } from '@/types/config';
 import { extractPieces, type ExtractOptions } from '@/content/domWalker';
 import { joinGroupText } from '@/content/pieceText';
+import { startSpaNavigationWatcher } from '@/content/spaNavigationWatcher';
 import { installPageLifecycle } from '@/content/pageLifecycle';
 import { ChurnGuard } from '@/content/churnGuard';
 import { MutationWatcher } from '@/content/mutationWatcher';
@@ -164,6 +165,9 @@ const handledContentKeys = new Set<string>();
 let systemicPause = false;
 /** FR-11: per-session document terms for subsequent batch prompts. */
 let sessionTermMemory: string[] = [];
+/** FR-17: the URL the page session's pieces belong to (pre-navigation on a route change). */
+let pageSessionUrl = '';
+let spaWatcherCleanup: (() => void) | null = null;
 /**
  * Thin session contract (FR-1): monotonically increasing id + registry of
  * live stream ports/AbortControllers. Bumped on start/stop/body-swap so
@@ -1303,13 +1307,13 @@ async function restoreFromSnapshot(
  * Captures a frozen copy of pieces immediately so callers may clear `allPieces`
  * without racing the async IDB write (stop path used to clear first → no-op).
  */
-function writeResumeSnapshot(options?: { awaitable?: false }): void;
-function writeResumeSnapshot(options: { awaitable: true }): Promise<void>;
-function writeResumeSnapshot(options?: { awaitable?: boolean }): void | Promise<void> {
+function writeResumeSnapshot(options?: { awaitable?: false; url?: string }): void;
+function writeResumeSnapshot(options: { awaitable: true; url?: string }): Promise<void>;
+function writeResumeSnapshot(options?: { awaitable?: boolean; url?: string }): void | Promise<void> {
   if (allPieces.length === 0) {
     return options?.awaitable ? Promise.resolve() : undefined;
   }
-  const url = window.location.href;
+  const url = options?.url ?? window.location.href;
   const targetLang = currentTargetLanguage;
   // Freeze pieces NOW — stopTranslation clears allPieces right after this call.
   const frozenPieces = allPieces.map((p) => ({
@@ -1356,6 +1360,17 @@ function registerResumeSnapshotWriter(): void {
   resumeSnapshotWriter = onUnload;
 }
 
+/**
+ * FR-17: a same-document route change ends the old page's context. Snapshot
+ * its pieces under the URL they came from and drop term memory gathered there.
+ */
+function handlePageRouteChange(url: string): void {
+  const previousUrl = pageSessionUrl;
+  pageSessionUrl = url;
+  if (resumeSnapshotWriter) writeResumeSnapshot({ url: previousUrl });
+  sessionTermMemory = [];
+}
+
 function unregisterResumeSnapshotWriter(): void {
   if (!resumeSnapshotWriter) return;
   window.removeEventListener('pagehide', resumeSnapshotWriter);
@@ -1388,6 +1403,8 @@ function teardownPageTranslationSession(): void {
     mutationWatcher.stop();
     mutationWatcher = null;
   }
+  spaWatcherCleanup?.();
+  spaWatcherCleanup = null;
   unregisterResumeSnapshotWriter();
   removeAllTranslations();
   removeAllSectionTranslations();
@@ -1513,6 +1530,10 @@ async function startTranslationUnlocked(): Promise<void> {
     }
     registerResumeSnapshotWriter();
   }
+
+  // FR-17: watch same-document route changes for this session.
+  pageSessionUrl = window.location.href;
+  spaWatcherCleanup = startSpaNavigationWatcher(handlePageRouteChange);
 
   // Create viewport observer for lazy translation.
   // FR-10: when many pieces become visible at once, prefer top-of-fold + headings.
@@ -1950,6 +1971,8 @@ function destroyZombie(): void {
     clearTimeout(statusTimer);
     statusTimer = null;
   }
+  try { spaWatcherCleanup?.(); } catch { /* noop */ }
+  spaWatcherCleanup = null;
   if (mutationWatcher) {
     try { mutationWatcher.stop(); } catch { /* noop */ }
     mutationWatcher = null;
@@ -2008,6 +2031,7 @@ export const __contentTranslationTestHooks = {
   startTranslation,
   getActiveRequests: () => activeRequests,
   isSystemicPaused: () => systemicPause,
+  getSessionTermMemory: () => [...sessionTermMemory],
   sendStatusUpdate,
   getPieceCount: () => allPieces.length,
   stopTranslationAsync,

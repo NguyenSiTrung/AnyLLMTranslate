@@ -372,7 +372,14 @@ describe('webTranslateLifecycle', () => {
         tabs: { onRemoved: { addListener: vi.fn() } },
         storage: { onChanged: { addListener: vi.fn() } },
       });
-      vi.stubGlobal('window', { ...window, location: { hostname: 'example.test' } });
+      // Sessions start the FR-17 route watcher, which needs events and history.
+      vi.stubGlobal('window', {
+        ...window,
+        location: { hostname: 'example.test' },
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        history: { pushState: vi.fn(), replaceState: vi.fn() },
+      });
 
       const content = await import('@/entrypoints/content');
       testHooks = (content as any).__contentTranslationTestHooks;
@@ -559,6 +566,7 @@ describe('webTranslateLifecycle', () => {
       });
       vi.stubGlobal('window', {
         location: { hostname: 'example.test', href: 'https://example.test/page' },
+        history: { pushState: vi.fn(), replaceState: vi.fn() },
         addEventListener: addSpy,
         removeEventListener: removeSpy,
         dispatchEvent: dispatchSpy,
@@ -646,6 +654,7 @@ describe('webTranslateLifecycle', () => {
       });
       vi.stubGlobal('window', {
         location: { hostname: 'example.test', href: 'https://example.test/zombie' },
+        history: { pushState: vi.fn(), replaceState: vi.fn() },
         addEventListener: addSpy,
         removeEventListener: removeSpy,
         dispatchEvent: vi.fn((event: Event) => {
@@ -1239,6 +1248,52 @@ describe('webTranslateLifecycle', () => {
         // Near-viewport membership came from the observer (p1 near, p2 not).
         const last = broadcasts.at(-1)![0] as unknown as { status: { visiblePending?: number } };
         expect(last.status.visiblePending).toBe(1);
+      });
+    });
+
+    describe('FR-17: SPA route change during page translation', () => {
+      it('resets term memory and writes the snapshot under the pre-navigation URL', async () => {
+        const { extractPieces } = await import('@/content/domWalker');
+        // The block's window stub lacks events and history; route changes need the real one.
+        vi.stubGlobal('window', document.defaultView);
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [],
+          enableWebResume: true,
+          enableStreamingTranslation: false,
+        }));
+        document.body.innerHTML = '<main><p>Hello Kubernetes</p></main>';
+        const p = document.querySelector('p')!;
+        const piece = {
+          id: 'route-1', text: 'Hello Kubernetes', sourceText: 'Hello Kubernetes', parentElement: p,
+          textNodes: [p.firstChild as Text], isTranslated: false, inArticleContext: false,
+        };
+        vi.mocked(extractPieces).mockReturnValueOnce([piece] as never);
+        const before = window.location.href;
+        await testHooks.startTranslation();
+
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockImplementation(async (msg) =>
+          msg?.action === 'translate'
+            ? { success: true, results: [{ id: 'route-1', translatedText: 'Xin chào Kubernetes Cluster' }] }
+            : {},
+        );
+        await testHooks.translatePieces([piece as never]);
+        expect(testHooks.getSessionTermMemory().length).toBeGreaterThan(0);
+
+        sendMessage.mockClear();
+        try {
+          history.pushState({}, '', '/fr17-next-route');
+          const saves = () => sendMessage.mock.calls.filter(([m]) => m?.action === 'WEB_RESUME_SAVE');
+          await vi.waitFor(() => expect(saves()).toHaveLength(1));
+          const saved = saves()[0][0] as unknown as { snapshot: { url: string } };
+          expect(saved.snapshot.url).toBe(before);
+          expect(testHooks.getSessionTermMemory()).toEqual([]);
+        } finally {
+          history.replaceState({}, '', before);
+        }
       });
     });
 

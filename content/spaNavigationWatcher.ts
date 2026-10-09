@@ -2,7 +2,13 @@ export interface SpaNavigationWatcherOptions {
   pollIntervalMs?: number;
 }
 
-/** Watch same-document navigation, including history calls from page scripts. */
+/**
+ * Watch same-document navigation. popstate/hashchange cover back/forward and
+ * fragment changes. The patched history methods only see calls made from THIS
+ * (isolated) world — a page script's pushState/replaceState runs against its
+ * own world's History wrapper — so polling the URL is the real signal for
+ * SPA route changes driven by the page.
+ */
 export function startSpaNavigationWatcher(
   onNavigation: (url: string) => void,
   options: SpaNavigationWatcherOptions = {},

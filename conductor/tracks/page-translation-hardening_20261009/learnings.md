@@ -174,3 +174,10 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: `main()` never runs under test (`defineContentScript` is mocked), so lifecycle wiring needs its own module to be testable.
   - Patterns: jsdom has no PageTransitionEvent constructor guarantee — `Object.assign(new Event('pagehide'), { persisted })` drives the handler.
 ---
+
+## [2026-10-09] - Phase 5 Task 2: SPA route handling for page translation (FR-17)
+- **Implemented:** each page session starts `startSpaNavigationWatcher(handlePageRouteChange)` (stopped in teardown and `destroyZombie`). On a route change the snapshot is written under `pageSessionUrl` (the pre-navigation URL, via a new `url` option on `writeResumeSnapshot`) when the resume writer is active, and `sessionTermMemory` resets. Watcher doc comment corrected: patched history methods only see isolated-world calls; polling catches page-script `pushState`.
+- **Files changed:** entrypoints/content.ts, content/spaNavigationWatcher.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Gotchas: the FR-1b `beforeEach` stubs `window` with `{ ...window }`, which drops prototype methods (`addEventListener`) — any new window listener in the session path needs the stubs widened. `document.defaultView` recovers the real jsdom window inside a test.
+---
