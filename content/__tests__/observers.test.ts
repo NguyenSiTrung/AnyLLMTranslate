@@ -238,6 +238,52 @@ describe('ViewportObserver', () => {
     expect(pausedVisible.mock.calls[0][0][0].id).toBe('a');
     pausedObserver.disconnect();
   });
+
+  it('FR-13: unobserve releases pieces fully across 1,000 detach/append cycles', () => {
+    const onVisible = vi.fn();
+    const observer = new ViewportObserver(onVisible, 50);
+    const mock = MockIntersectionObserver.instances.at(-1)!;
+    const shared = document.createElement('div');
+    document.body.appendChild(shared);
+    const keep = makePiece('keep', shared);
+    observer.observe(keep);
+
+    for (let i = 0; i < 1000; i++) {
+      const p = document.createElement('p');
+      document.body.appendChild(p);
+      const own = makePiece(`own-${i}`, p);
+      const sibling = makePiece(`sib-${i}`, shared);
+      observer.observe(own);
+      observer.observe(sibling);
+      p.remove();
+      observer.unobserve(own);
+      observer.unobserve(sibling);
+    }
+
+    expect(observer.observedCount).toBe(1);
+    expect([...mock.observed]).toEqual([shared]);
+    mock.fire(shared, true);
+    vi.advanceTimersByTime(50);
+    expect(onVisible.mock.calls.flatMap((c) => c[0])).toEqual([keep]);
+  });
+
+  it('FR-13: unobserve drops a pending piece and clears its dispatch state', () => {
+    const onVisible = vi.fn();
+    const observer = new ViewportObserver(onVisible, 50);
+    const mock = MockIntersectionObserver.instances.at(-1)!;
+    const p = document.createElement('p');
+    document.body.appendChild(p);
+    const piece = makePiece('pending', p);
+    observer.observe(piece);
+    mock.fire(p, true);
+    observer.unobserve(piece);
+    vi.advanceTimersByTime(50);
+    expect(onVisible).not.toHaveBeenCalled();
+
+    // Dispatch state is gone: the same piece can be observed again.
+    observer.observe(piece);
+    expect(mock.observed.has(p)).toBe(true);
+  });
 });
 
 /** @vitest-environment jsdom */

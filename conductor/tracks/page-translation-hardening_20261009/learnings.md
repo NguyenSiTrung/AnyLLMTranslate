@@ -134,3 +134,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Gotchas: vitest's include glob picks up untracked scratch dirs (`.review-scratch/__tests__/repro.test.ts` — intentional failing repros from another review). Read the FAIL paths before treating a gate as red; never delete or stage another session's scratch files.
 ---
+
+## [2026-10-09] - Phase 4 Task 1: Release detached pieces fully (FR-13)
+- **Implemented:** `ViewportObserver.unobserve(piece)` (drops the piece from its target list, pending batch and dispatch ids; unobserves the target once empty). `pruneDetachedPieces` calls it plus `removePieceArtifacts`; `retirePiece` uses it instead of `release`. Test hook `__pieceElementCountForTest`.
+- **Files changed:** content/viewportObserver.ts, content/translationDisplay.ts, entrypoints/content.ts, content/__tests__/observers.test.ts, content/__tests__/translationDisplay.test.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Gotchas: a block translation is inserted AFTER its original, so a site that removes the original leaves the translation connected — pruning must remove artifacts, not just forget the piece.
+  - Patterns: `findPieceElement` already self-heals the id→element map for detached elements; the leak was in observer `pieceMap` (IntersectionObserver kept detached targets alive).
+---

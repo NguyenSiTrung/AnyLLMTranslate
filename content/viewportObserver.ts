@@ -123,6 +123,28 @@ export class ViewportObserver {
     this.observer.observe(target);
   }
 
+  /**
+   * FR-13: forget a detached or retired piece — drop it from its target's
+   * list (unobserving the target once empty), from the pending batch, and
+   * from dispatch state, so nothing keeps the detached subtree alive.
+   */
+  unobserve(piece: TranslationPiece): void {
+    this.dispatchedIds.delete(piece.id);
+    if (this.pendingPieces.includes(piece)) {
+      this.pendingPieces = this.pendingPieces.filter((p) => p !== piece);
+    }
+    const target = piece.parentElement;
+    const pieces = this.pieceMap.get(target);
+    if (!pieces) return;
+    const rest = pieces.filter((p) => p !== piece);
+    if (rest.length > 0) {
+      this.pieceMap.set(target, rest);
+      return;
+    }
+    this.pieceMap.delete(target);
+    this.observer.unobserve(target);
+  }
+
   /** Observe multiple pieces */
   observeAll(pieces: TranslationPiece[]): void {
     for (const piece of pieces) {

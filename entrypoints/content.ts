@@ -290,7 +290,7 @@ function retirePiece(piece: TranslationPiece): void {
   if (idx !== -1) allPieces.splice(idx, 1);
   handledContentKeys.delete(contentKeyForPiece(piece));
   inFlightPieceIds.delete(piece.id);
-  viewportObserver?.release(piece.id);
+  viewportObserver?.unobserve(piece);
 }
 
 function markContentHandled(piece: TranslationPiece): void {
@@ -422,7 +422,9 @@ function appendPieces(next: TranslationPiece[]): void {
   }
 }
 
-/** FR-7: drop pieces whose parent is no longer in the document. */
+/** FR-7: drop pieces whose parent is no longer in the document.
+ *  FR-13: release every reference — observer target, dispatch state and
+ *  display artifacts (a block translation sits after the detached original). */
 function pruneDetachedPieces(): number {
   let removed = 0;
   const kept: TranslationPiece[] = [];
@@ -432,6 +434,8 @@ function pruneDetachedPieces(): number {
       invalidatedPieceIds.add(piece.id);
       inFlightPieceIds.delete(piece.id);
       handledContentKeys.delete(contentKeyForPiece(piece));
+      viewportObserver?.unobserve(piece);
+      removePieceArtifacts(piece.id, piece.parentElement);
       removed++;
     } else {
       kept.push(piece);
@@ -1928,6 +1932,7 @@ export const __contentTranslationTestHooks = {
   startTranslation,
   getActiveRequests: () => activeRequests,
   isSystemicPaused: () => systemicPause,
+  getPieceCount: () => allPieces.length,
   stopTranslationAsync,
   destroyZombie,
 };

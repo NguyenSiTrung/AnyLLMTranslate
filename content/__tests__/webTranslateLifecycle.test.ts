@@ -316,6 +316,7 @@ describe('webTranslateLifecycle', () => {
           this.release = vi.fn();
           this.releaseAll = vi.fn();
           this.setPaused = vi.fn();
+          this.unobserve = vi.fn();
         }),
       }));
       vi.doMock('@/content/mutationWatcher', () => ({
@@ -1091,6 +1092,53 @@ describe('webTranslateLifecycle', () => {
       });
     });
 
+    describe('FR-13: detached pieces release every reference', () => {
+      it('1,000 detach/append cycles unobserve and remove artifacts for each pruned piece', async () => {
+        const { extractPieces } = await import('@/content/domWalker');
+        const display = await import('@/content/translationDisplay');
+        const { MutationWatcher } = await import('@/content/mutationWatcher');
+        const { ViewportObserver } = await import('@/content/viewportObserver');
+        vi.mocked(display.getPageState).mockReturnValue('dual');
+        vi.mocked(extractPieces).mockReturnValue([]);
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...DEFAULT_SETTINGS,
+          sourceLanguage: 'en',
+          targetLanguage: 'vi',
+          siteRules: [],
+          enableWebResume: false,
+        }));
+        document.body.innerHTML = '<main></main>';
+        const main = document.querySelector('main')!;
+        await testHooks.startTranslation();
+        const onMutation = (vi.mocked(MutationWatcher).mock.calls.at(-1) as unknown[])[0] as (
+          added: Element[],
+        ) => void;
+        const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
+          unobserve: Mock<(piece: { id: string }) => void>;
+        };
+        vi.mocked(display.removePieceArtifacts).mockClear();
+
+        for (let i = 0; i < 1000; i++) {
+          const p = document.createElement('p');
+          p.textContent = `Row ${i}`;
+          main.appendChild(p);
+          const piece = {
+            id: `row-${i}`, text: `Row ${i}`, sourceText: `Row ${i}`, parentElement: p,
+            textNodes: [p.firstChild as Text], isTranslated: false, inArticleContext: false,
+          };
+          vi.mocked(extractPieces).mockReturnValueOnce([piece] as never);
+          onMutation([p]);
+          p.remove();
+          onMutation([]);
+        }
+
+        expect(observer.unobserve).toHaveBeenCalledTimes(1000);
+        expect(observer.unobserve.mock.calls.at(-1)?.[0].id).toBe('row-999');
+        expect(display.removePieceArtifacts).toHaveBeenCalledTimes(1000);
+        expect(testHooks.getPieceCount()).toBe(0);
+      });
+    });
+
     it('bedw: marked back-fill shows incomplete error; a genuine source echo still applies', async () => {
       // Regression: back-fill detection must use the explicit `backfilled`
       // marker, not `partial && translatedText === piece.text` — the latter
@@ -1458,6 +1506,7 @@ describe('webTranslateLifecycle', () => {
       const observer = vi.mocked(ViewportObserver).mock.instances.at(-1) as unknown as {
         observeAll: ReturnType<typeof vi.fn>;
         release: ReturnType<typeof vi.fn>;
+        unobserve: ReturnType<typeof vi.fn>;
       };
       return { display, onMutation, observer };
     };
@@ -1516,7 +1565,9 @@ describe('webTranslateLifecycle', () => {
         expect(display.removePieceArtifacts).toHaveBeenCalledWith('old-id', p);
         expect(p.hasAttribute(DATA_ATTRS.ROLE)).toBe(false);
         expect(translation.isConnected).toBe(false);
-        expect(observer.release).toHaveBeenCalledWith('old-id');
+        // FR-13: the retired piece leaves the observer entirely (target and
+        // dispatch state), not just its dispatched id.
+        expect(observer.unobserve).toHaveBeenCalledWith(expect.objectContaining({ id: 'old-id' }));
 
         // Exactly one replacement piece observed — the new source text.
         const calls = observer.observeAll.mock.calls.map((c) => c[0] as unknown[]);

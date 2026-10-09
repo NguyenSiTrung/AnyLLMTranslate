@@ -941,6 +941,9 @@ export function setPageState(state: PageState): void {
   syncInlineTranslationOnlySiblings();
 }
 
+/** Number of piece elements in the lookup map (tests, FR-13). */
+export const __pieceElementCountForTest = (): number => pieceElements.size;
+
 /** Run the translation-only inline clone sync synchronously (tests). */
 export const __syncInlineSiblingsForTest = syncInlineTranslationOnlySiblings;
 

@@ -23,6 +23,7 @@ import {
   removePieceArtifacts,
   showInlineLoadingPlaceholder,
   __syncInlineSiblingsForTest as syncInlineSiblingsNow,
+  __pieceElementCountForTest as trackedPieceElements,
 } from '@/content/translationDisplay';
 import {
   registerShadowRoots,
@@ -552,6 +553,24 @@ describe('translationDisplay', () => {
     });
   });
 
+
+  describe('detached pieces release display tracking (FR-13)', () => {
+    it('keeps the piece-element map bounded across 1,000 detach cycles', () => {
+      setPageState('dual');
+      for (let i = 0; i < 1000; i++) {
+        const p = document.createElement('p');
+        p.textContent = `Paragraph ${i}`;
+        document.body.appendChild(p);
+        showLoadingPlaceholder(p, `cycle-${i}`);
+        // Block placeholders sit after the original — detaching the original
+        // must not orphan them in the page or the map.
+        p.remove();
+        removePieceArtifacts(`cycle-${i}`, p);
+      }
+      expect(trackedPieceElements()).toBe(0);
+      expect(document.querySelectorAll('[data-anyllm-piece-id]')).toHaveLength(0);
+    });
+  });
 
   describe('contained LI/TD/TH hosts never re-parent site nodes (FR-7)', () => {
     function buildReactLikeItem(): { li: HTMLLIElement; children: ChildNode[] } {
