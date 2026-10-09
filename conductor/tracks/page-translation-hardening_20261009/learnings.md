@@ -181,3 +181,12 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Gotchas: the FR-1b `beforeEach` stubs `window` with `{ ...window }`, which drops prototype methods (`addEventListener`) — any new window listener in the session path needs the stubs widened. `document.defaultView` recovers the real jsdom window inside a test.
 ---
+
+## [2026-10-09] - Phase 5 Task 3: Provider-accurate cache scope (FR-18)
+- **Implemented:** `TranslationResult.servedBy {model, baseUrl, temperature}`; `ProviderPoolCoordinator.dispatchWithFailover` passes the slot to its callback and `translate`/`translateStream` stamp `servedBy` via `withServedBy`. `resolveWebCacheScope(settings, servedBy?)` uses it; per-batch translation writes use the serving scope. Reads and the negative cache stay on the first-enabled scope.
+- **Files changed:** types/translation.ts, services/providerPool.ts, services/background.ts, services/__tests__/background.translate.test.ts
+- **Learnings:**
+  - Gotchas: the scope never includes keys or slot ids, so identically configured slots already share hits — the test fails slot A by API key so B really serves.
+  - Gotchas: a `vi.fn(async (url) => cond ? {..., text: async () => ''} : {...})` mock trips TS7023 under tsc; annotate the inner `text`'s return type.
+  - Context: failure-cache writes deliberately stay on the read scope; keying them by the serving slot would make negative hits unreachable.
+---

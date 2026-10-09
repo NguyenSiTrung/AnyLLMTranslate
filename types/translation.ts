@@ -103,6 +103,15 @@ export interface TranslationResult {
    *  Populated when the model returns a "properNouns" field alongside
    *  "translations". Undefined on the web-page translation path. */
   properNouns?: Record<string, string>;
+  /** FR-18: config of the pool slot that produced this result (cache scope). */
+  servedBy?: ServedBy;
+}
+
+/** The output-shaping config of the provider slot that served a request. */
+export interface ServedBy {
+  model: string;
+  baseUrl: string;
+  temperature?: number;
 }
 
 /** Translation service interface */

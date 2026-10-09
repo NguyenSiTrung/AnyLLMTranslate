@@ -84,9 +84,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 5.2: SPA route handling for page translation (FR-17)
   - [x] Test: route change resets term memory; the snapshot is written under the old URL
   - [x] Wire `startSpaNavigationWatcher` into the page session; correct its doc comment
-- [ ] Task 5.3: Provider-accurate cache scope (FR-18)
-  - [ ] Test: translation served by slot B is cached under B's scope; identically configured slots still share hits
-  - [ ] Return the serving slot's identity from the pool; key cache writes by it
+- [x] Task 5.3: Provider-accurate cache scope (FR-18)
+  - [x] Test: translation served by slot B is cached under B's scope; identically configured slots still share hits
+  - [x] Return the serving slot's identity from the pool; key cache writes by it
 - [ ] Task 5.4: Explicit backfill ids (FR-19)
   - [ ] Test: partial response with a genuine source-identical translation is not marked backfilled
   - [ ] Add `backfilledIds` to `TranslationResult` in `services/openaiCompatible.ts`; consume it in `handleTranslate`

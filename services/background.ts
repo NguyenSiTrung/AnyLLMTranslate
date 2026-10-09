@@ -46,7 +46,7 @@ import type {
   GetDomOutlineResult,
   OpenOptionsMessage,
 } from '@/types/messages';
-import type { TranslationRequest, TranslationResult } from '@/types/translation';
+import type { ServedBy, TranslationRequest, TranslationResult } from '@/types/translation';
 import {
   buildSuggestSiteRuleDraft,
   tabUrlMatchesHostname,
@@ -118,13 +118,17 @@ import { formatGlossary } from '@/lib/glossary';
  * FR-6: web cache fingerprint from live settings.
  * Always-on for dimensions that change output; empty string when nothing
  * optional is set (legacy lang+text keys still work for bare configs).
+ * FR-18: `servedBy` (the slot that produced a translation) overrides the
+ * first-enabled provider, so writes land under the serving provider's scope.
+ * Keys and slot ids are never part of the scope, so identically configured
+ * slots share hits.
  */
-function resolveWebCacheScope(settings: ExtensionSettings): {
+function resolveWebCacheScope(settings: ExtensionSettings, servedBy?: ServedBy): {
   modelId: string | undefined;
   fingerprint: string | undefined;
 } {
   const enabled =
-    settings.providers?.find((p) => p.enabled) ?? settings.providers?.[0];
+    servedBy ?? settings.providers?.find((p) => p.enabled) ?? settings.providers?.[0];
   const model =
     enabled?.model || settings.provider?.model || undefined;
   const baseUrl =
@@ -1143,6 +1147,12 @@ async function handleTranslate(
           );
         }
 
+        // FR-18: key translation writes by the slot that actually served the
+        // batch. The negative cache stays on the read scope so lookups find it.
+        const writeScope = result.servedBy
+          ? resolveWebCacheScope(settings, result.servedBy)
+          : { modelId: cacheModelId, fingerprint: cacheFp };
+
         if (result.success) {
           const results: TranslationResultItem[] = [];
           const backfilled: string[] = [];
@@ -1172,8 +1182,8 @@ async function handleTranslate(
                   translatedText,
                   message.sourceLanguage,
                   message.targetLanguage,
-                  cacheModelId,
-                  cacheFp,
+                  writeScope.modelId,
+                  writeScope.fingerprint,
                 );
               }
             }

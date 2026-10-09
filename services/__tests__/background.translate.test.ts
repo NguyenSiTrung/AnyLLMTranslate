@@ -1233,3 +1233,91 @@ describe('handleTranslate — abortable non-streaming translate (FR-12)', () => 
     expect(fresh).toMatchObject({ success: true, results: [{ id: 'c', translatedText: 'Xin chào' }] });
   });
 });
+
+describe('handleTranslate — FR-18 cache scope follows the serving slot', () => {
+  const provider = (id: string, baseUrl: string, model: string) => ({
+    id,
+    displayName: id,
+    baseUrl,
+    model,
+    requiresApiKey: true,
+    temperature: 0.3,
+    maxTokens: 4096,
+    enabled: true,
+    keys: [{ id: `${id}-k`, apiKey: `sk-${id}`, maxRpm: 0, concurrencyLimit: 0, interval: 0, enabled: true }],
+  });
+
+  /** Requests matching `failing` (URL prefix or API key) answer 401 (immediate failover). */
+  function routeFetch(failing: string | null): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) =>
+        failing &&
+        (String(url).startsWith(failing) || JSON.stringify(init?.headers ?? {}).includes(failing))
+          ? { ok: false, status: 401, statusText: 'Unauthorized', json: async () => ({}), text: async (): Promise<string> => 'Unauthorized' }
+          : {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                id: 't',
+                choices: [{
+                  message: { role: 'assistant', content: JSON.stringify({ translations: { p1: 'Xin chào' } }) },
+                  finish_reason: 'stop',
+                }],
+              }),
+              text: async (): Promise<string> => '',
+            },
+      ),
+    );
+  }
+
+  let getCachedTranslation: ReturnType<typeof vi.fn>;
+  let cacheTranslation: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null);
+  });
+
+  async function translateOnce(providers: unknown[], failing: string | null) {
+    mockStorage['anyllm-translate-settings'] = { providers };
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    getCachedTranslation.mockClear();
+    cacheTranslation.mockClear();
+    routeFetch(failing);
+    const result = (await handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), fakeSender)) as {
+      success: boolean;
+    };
+    expect(result.success).toBe(true);
+    return {
+      readFp: getCachedTranslation.mock.calls[0]?.[5] as string | undefined,
+      writeFp: cacheTranslation.mock.calls[0]?.[5] as string | undefined,
+    };
+  }
+
+  it('caches a translation served by slot B under B\'s scope', async () => {
+    const a = provider('pa', 'https://a.example/v1', 'model-a');
+    const b = provider('pb', 'https://b.example/v1', 'model-b');
+
+    const failover = await translateOnce([a, b], 'https://a.example');
+    const bOnly = await translateOnce([b], null);
+    expect(failover.readFp).not.toBe(bOnly.readFp); // reads still use the first slot's scope
+    expect(failover.writeFp).toBe(bOnly.writeFp);
+    expect(failover.writeFp).toBe(bOnly.readFp);
+  });
+
+  it('identically configured slots share one scope (reads still hit)', async () => {
+    const a = provider('pa', 'https://same.example/v1', 'model-x');
+    const b = provider('pb', 'https://same.example/v1', 'model-x');
+    // Slot A's key is rejected, so B serves; its write lands where A-first reads look.
+    const failover = await translateOnce([a, b], 'sk-pa');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(failover.writeFp).toBe(failover.readFp);
+  });
+});

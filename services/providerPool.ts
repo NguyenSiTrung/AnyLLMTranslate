@@ -115,6 +115,12 @@ interface MemberRecord {
   slot: PoolSlot;
 }
 
+/** FR-18: stamp the serving slot's output-shaping config onto a result. */
+function withServedBy(result: TranslationResult, slot: PoolSlot): TranslationResult {
+  const { model, baseUrl, temperature } = slot.providerConfig;
+  return { ...result, servedBy: { model, baseUrl, temperature } };
+}
+
 export class ProviderPoolCoordinator implements TranslationService {
   private readonly serviceFactory: ServiceFactory;
   private readonly breaker: CircuitBreaker;
@@ -202,7 +208,7 @@ export class ProviderPoolCoordinator implements TranslationService {
 
   async translate(request: TranslationRequest): Promise<TranslationResult> {
     return this.dispatchWithFailover(
-      (service) => service.translate(request),
+      (service, slot) => service.translate(request).then((result) => withServedBy(result, slot)),
       () => request.signal?.aborted === true,
     );
   }
@@ -212,9 +218,9 @@ export class ProviderPoolCoordinator implements TranslationService {
     onPiece: (id: string, text: string) => void,
   ): Promise<TranslationResult> {
     return this.dispatchWithFailover(
-      (service) => {
+      (service, slot) => {
         if (service.translateStream) {
-          return service.translateStream(request, onPiece);
+          return service.translateStream(request, onPiece).then((result) => withServedBy(result, slot));
         }
         return service.translate(request).then((result) => {
           if (result.success) {
@@ -222,7 +228,7 @@ export class ProviderPoolCoordinator implements TranslationService {
               onPiece(id, text);
             }
           }
-          return result;
+          return withServedBy(result, slot);
         });
       },
       () => request.signal?.aborted === true,
@@ -454,7 +460,7 @@ export class ProviderPoolCoordinator implements TranslationService {
   }
 
   private async dispatchWithFailover<T>(
-    call: (service: TranslationService) => Promise<T>,
+    call: (service: TranslationService, slot: PoolSlot) => Promise<T>,
     isCancelled: () => boolean = () => false,
   ): Promise<T> {
     const now = this.clock();
@@ -564,7 +570,7 @@ export class ProviderPoolCoordinator implements TranslationService {
         if (isCancelled()) {
           throw new Error(ASR_REALIGN_CANCELLED);
         }
-        const result = await call(member.service);
+        const result = await call(member.service, slot);
         this.breaker.recordSuccess(slot.slotId);
         return result;
       } catch (error) {
