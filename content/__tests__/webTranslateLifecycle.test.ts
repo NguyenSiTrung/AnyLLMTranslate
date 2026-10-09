@@ -4,7 +4,7 @@
  *
  * @vitest-environment jsdom
  */
-import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach, type Mock } from 'vitest';
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacyConsent';
 vi.mock('wxt/sandbox', () => ({ defineContentScript: vi.fn() }));
 import {
@@ -27,6 +27,15 @@ import { matchResumeTranslations, parentPathFromElement } from '@/lib/resumeIden
  * mocked settings object carries an accepted record; the gate itself is covered
  * by the first case in the FR-1b describe below.
  */
+type RuntimeMessage = { action?: string; pieces?: Array<{ id: string }> };
+
+/** The stubbed `chrome.runtime.sendMessage` spy, typed for request matching. */
+function runtimeSendMessage(): Mock<(msg: RuntimeMessage) => Promise<unknown>> {
+  return (globalThis as unknown as {
+    chrome: { runtime: { sendMessage: Mock<(msg: RuntimeMessage) => Promise<unknown>> } };
+  }).chrome.runtime.sendMessage;
+}
+
 function settingsWithConsent<T extends Record<string, unknown>>(settings: T): T {
   return {
     ...settings,
@@ -849,14 +858,14 @@ describe('webTranslateLifecycle', () => {
           ...defaultSettings(),
           enableStreamingTranslation: false,
         }));
-        const chrome = (globalThis as any).chrome;
-        chrome.runtime.sendMessage.mockImplementation(async (msg: any) =>
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockImplementation(async (msg) =>
           msg?.action === 'translate' ? response : {},
         );
         const piece = makePiece('p1', 'Hello world');
         await testHooks.translatePieces([piece]);
-        const translateCalls = chrome.runtime.sendMessage.mock.calls.filter(
-          ([msg]: any[]) => msg?.action === 'translate',
+        const translateCalls = sendMessage.mock.calls.filter(
+          ([msg]) => msg?.action === 'translate',
         );
         return { display, notify, translateCalls };
       }
@@ -910,10 +919,10 @@ describe('webTranslateLifecycle', () => {
         }));
 
         const pending = new Map<string, (r: unknown) => void>();
-        const chrome = (globalThis as any).chrome;
-        chrome.runtime.sendMessage.mockImplementation((msg: any) => {
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockImplementation((msg) => {
           if (msg?.action !== 'translate') return Promise.resolve({});
-          const id = msg.pieces[0].id as string;
+          const id = msg.pieces?.[0]?.id ?? '';
           // A re-dispatch (the bug) answers at once instead of hanging the test.
           if (pending.has(id)) return Promise.resolve({ success: false, error: '503 Service Unavailable' });
           return new Promise((resolve) => pending.set(id, resolve));
@@ -932,8 +941,8 @@ describe('webTranslateLifecycle', () => {
         pending.get('b')!({ success: false, error: '503 Service Unavailable' });
         await runB;
 
-        const translateCalls = chrome.runtime.sendMessage.mock.calls.filter(
-          ([msg]: any[]) => msg?.action === 'translate',
+        const translateCalls = sendMessage.mock.calls.filter(
+          ([msg]) => msg?.action === 'translate',
         );
         expect(translateCalls).toHaveLength(2);
         expect(testHooks.isSystemicPaused()).toBe(true);
@@ -954,15 +963,15 @@ describe('webTranslateLifecycle', () => {
           ...defaultSettings(),
           enableStreamingTranslation: false,
         }));
-        const chrome = (globalThis as any).chrome;
-        chrome.runtime.sendMessage.mockImplementation(async (msg: any) =>
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockImplementation(async (msg) =>
           msg?.action === 'translate' ? { success: false, error: '401 Unauthorized' } : {},
         );
         const a = makePiece('a', 'Alpha text');
         await testHooks.translatePieces([a]);
         expect(testHooks.isSystemicPaused()).toBe(true);
 
-        chrome.runtime.sendMessage.mockImplementation(async (msg: any) =>
+        sendMessage.mockImplementation(async (msg) =>
           msg?.action === 'translate'
             ? { success: true, results: [{ id: 'a', translatedText: 'Alfa' }] }
             : {},
