@@ -520,7 +520,9 @@ export function showInlineLoadingPlaceholder(parentElement: Element, pieceId: st
 
   // Ensure a visible sibling clone exists in translation-only mode where
   // the original (hidden) container would otherwise hide the spinner too.
-  syncInlineTranslationOnlySiblings();
+  // FR-8: debounced — each pass rebuilds every clone, so N placeholders would
+  // otherwise cost O(N²).
+  debouncedSyncInlineSiblings();
 }
 
 /** Format inline translation text — uses parentheses for most languages,

@@ -82,3 +82,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: every role=original theme/position rule (side-by-side 48%, above order/display) must be scoped `:not([data-anyllm-contained])` or it resizes the LI/TD itself.
   - Context: legacy `data-anyllm-original-wrapper` unwrap stays in cleanup paths for pages translated by older builds.
 ---
+
+## [2026-10-09] - Phase 2 Task 2: Debounce translation-only inline copy sync (FR-8)
+- **Implemented:** `showInlineLoadingPlaceholder` uses `debouncedSyncInlineSiblings`; `scheduleDomWrite` now drops a function already queued for the frame.
+- **Files changed:** content/translationDisplay.ts, lib/performance.ts, content/__tests__/translationDisplay.inlineSync.test.ts
+- **Learnings:**
+  - Gotchas: `scheduleDomWrite` batched into one rAF but queued duplicates, so "debounced" sync still ran N times per frame — identity dedupe in the queue was the actual fix.
+  - Patterns: rAF-debounce tests go in their own file with `vi.useFakeTimers({ toFake: ['requestAnimationFrame'] })` + `advanceTimersToNextFrame()`; module-level queue state from earlier tests in the same file can leave a real rAF pending.
+---

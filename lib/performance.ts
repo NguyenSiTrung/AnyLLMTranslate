@@ -12,6 +12,8 @@ let rafId: number | null = null;
  * Batches multiple writes into a single frame.
  */
 export function scheduleDomWrite(writeFn: () => void): void {
+  // The same function queued twice in one frame runs once (debounce).
+  if (pendingWrites.includes(writeFn)) return;
   pendingWrites.push(writeFn);
 
   if (rafId === null) {
