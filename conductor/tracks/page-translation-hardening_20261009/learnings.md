@@ -205,3 +205,7 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: the audit-v2 "P0 regression" for `deduplicateAncestors` was not reachable — the input is sorted into preorder first, and in preorder everything between an ancestor and its descendant is itself inside the ancestor. The only real hazard is mixing trees, since `contains` never crosses a shadow boundary.
   - Patterns: the near-IO Set from FR-15 replaced both the status geometry and the unpause geometry; parsing `VIEWPORT_MARGIN` was unnecessary once the IO itself carries the margin.
 ---
+
+## [2026-10-09] - Phase 5 gate: Lifecycle and small fixes
+- **Result:** tsc 0, lint 37 (baseline 38), tracked tests 836/836 (untracked `.review-scratch` excluded). `background.streamStats` flaked on two runs during the phase and passed on rerun; no services change was involved in either.
+---
