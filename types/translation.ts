@@ -99,6 +99,10 @@ export interface TranslationResult {
   /** True when the LLM omitted some IDs and they were back-filled with the
    *  original text (success, but content was repaired — useful for stats). */
   partial?: boolean;
+  /** FR-19: ids the service back-filled with their source text. Consumers
+   *  must use this, not `partial && text === source` — a genuine translation
+   *  can equal its source. */
+  backfilledIds?: Set<string>;
   /** Proper nouns extracted from the response (subtitle path only).
    *  Populated when the model returns a "properNouns" field alongside
    *  "translations". Undefined on the web-page translation path. */

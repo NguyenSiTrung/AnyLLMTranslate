@@ -346,15 +346,14 @@ export class OpenAICompatibleService implements TranslationService {
     // P2 correctness: when the LLM omits some IDs, fall back to the original
     // text so callers don't silently drop content (a partial response was
     // previously reported as success: true with a short map, losing pieces).
-    let partial = false;
-    if (translations.size < expectedIds.length) {
-      partial = true;
-      for (const id of expectedIds) {
-        if (!translations.has(id)) {
-          translations.set(id, request.texts.get(id) ?? '');
-        }
+    const backfilledIds = new Set<string>();
+    for (const id of expectedIds) {
+      if (!translations.has(id)) {
+        translations.set(id, request.texts.get(id) ?? '');
+        backfilledIds.add(id);
       }
     }
+    const partial = backfilledIds.size > 0;
 
     // Subtitle path: extract proper nouns for the rolling glossary.
     // Web-page path: properNouns stays undefined.
@@ -368,6 +367,7 @@ export class OpenAICompatibleService implements TranslationService {
       // Surfaced for callers/stats that want to distinguish a clean response
       // from a repaired partial one. Still success (content is not lost).
       partial,
+      ...(partial ? { backfilledIds } : {}),
       properNouns,
     };
   }
@@ -505,17 +505,21 @@ export class OpenAICompatibleService implements TranslationService {
     }
 
     // P2 correctness: back-fill missing pieces with original text (partial).
-    let partial = false;
-    if (emittedPieces.size < expectedIds.length) {
-      partial = true;
-      for (const id of expectedIds) {
-        if (!emittedPieces.has(id)) {
-          emittedPieces.set(id, request.texts.get(id) ?? '');
-        }
+    const backfilledIds = new Set<string>();
+    for (const id of expectedIds) {
+      if (!emittedPieces.has(id)) {
+        emittedPieces.set(id, request.texts.get(id) ?? '');
+        backfilledIds.add(id);
       }
     }
+    const partial = backfilledIds.size > 0;
 
-    return { success: true, translations: emittedPieces, partial };
+    return {
+      success: true,
+      translations: emittedPieces,
+      partial,
+      ...(partial ? { backfilledIds } : {}),
+    };
   }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {

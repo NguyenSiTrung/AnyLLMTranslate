@@ -1321,3 +1321,33 @@ describe('handleTranslate — FR-18 cache scope follows the serving slot', () =>
     expect(failover.writeFp).toBe(failover.readFp);
   });
 });
+
+describe('handleTranslate — FR-19 explicit backfill ids', () => {
+  it('a genuine source-identical translation in a partial response is not marked backfilled', async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    const getCachedTranslation = mod.getCachedTranslation as ReturnType<typeof vi.fn>;
+    const cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
+    getCachedTranslation.mockResolvedValue(null);
+
+    // p1 genuinely translates to itself ("OK" → "OK"); p2 is omitted and back-filled.
+    mockFetchTranslation({ translations: { p1: 'OK' } });
+    const result = (await handleMessage(
+      buildMsg([
+        { id: 'p1', text: 'OK' },
+        { id: 'p2', text: 'World' },
+      ]),
+      fakeSender,
+    )) as { success: boolean; results: Array<{ id: string; translatedText: string; backfilled?: boolean }> };
+
+    const byId = new Map(result.results.map((r) => [r.id, r]));
+    expect(byId.get('p1')).toEqual({ id: 'p1', translatedText: 'OK' });
+    expect(byId.get('p2')?.backfilled).toBe(true);
+    const cachedTexts = cacheTranslation.mock.calls.map((call) => call[0]);
+    expect(cachedTexts).toContain('OK');
+    expect(cachedTexts).not.toContain('World');
+  });
+});

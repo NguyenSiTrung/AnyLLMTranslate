@@ -1158,14 +1158,11 @@ async function handleTranslate(
           const backfilled: string[] = [];
           for (const [id, translatedText] of result.translations.entries()) {
             const piece = batch.find((p) => p.id === id);
-            // FR-7 (fixes #9): partial-result guard — never cache back-fills,
-            // and mark the item explicitly so consumers don't have to guess
-            // via `partial && text === source` (a genuine source-identical
-            // translation must not be mislabeled when a sibling fails).
+            // FR-7 (fixes #9) + FR-19: never cache back-fills, and mark the
+            // item from the service's explicit ids — a genuine source-identical
+            // translation must not be mislabeled when a sibling fails.
             const isBackfilled =
-              piece !== undefined &&
-              result.partial === true &&
-              translatedText === piece.text;
+              piece !== undefined && result.backfilledIds?.has(id) === true;
             results.push(
               isBackfilled
                 ? { id, translatedText, backfilled: true }
@@ -1807,8 +1804,8 @@ async function handleTranslateSubtitle(
                 textToTranslation.set(originalText, translatedText);
                 // Partial-result guard: when the LLM omitted this ID, the service
                 // back-fills it with the source text. Never cache that — it would
-                // persist source-as-translation. (result.partial marks the chunk.)
-                const isBackfilled = result.partial === true && rawTranslatedText === originalText;
+                // persist source-as-translation (FR-19: explicit ids).
+                const isBackfilled = result.backfilledIds?.has(id) === true;
                 if (!isBackfilled) {
                   const writeKey = await cacheKeyFor(originalText);
                   await cacheTranslationByKey(writeKey, translatedText, sourceLanguage, targetLanguage);

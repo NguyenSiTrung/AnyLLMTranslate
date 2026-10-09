@@ -190,3 +190,10 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: a `vi.fn(async (url) => cond ? {..., text: async () => ''} : {...})` mock trips TS7023 under tsc; annotate the inner `text`'s return type.
   - Context: failure-cache writes deliberately stay on the read scope; keying them by the serving slot would make negative hits unreachable.
 ---
+
+## [2026-10-09] - Phase 5 Task 4: Explicit backfill ids (FR-19)
+- **Implemented:** `TranslationResult.backfilledIds` (Set) set by `OpenAICompatibleService.translate`/`translateStream` when they back-fill missing ids; `partial` is now derived from it. `handleTranslate` and the subtitle chunk path read `result.backfilledIds?.has(id)` instead of `partial && text === source`. The pool's `withServedBy` spread carries the Set through.
+- **Files changed:** types/translation.ts, services/openaiCompatible.ts, services/background.ts, services/__tests__/background.translate.test.ts, services/__tests__/openaiCompatible.test.ts
+- **Learnings:**
+  - Gotchas: `background.streamStats` flakes on different tests from run to run (seen on two tests this session); always rerun it in isolation before blaming a change.
+---

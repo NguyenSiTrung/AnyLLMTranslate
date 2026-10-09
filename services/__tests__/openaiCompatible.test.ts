@@ -159,6 +159,8 @@ describe('OpenAICompatibleService', () => {
       expect(partial.translations.get('p1')).toBe('Xin chào');
       expect(partial.translations.get('p2')).toBe('Goodbye');
       expect(partial.translations.size).toBe(2);
+      // FR-19: back-fills are named explicitly.
+      expect([...(partial.backfilledIds ?? [])]).toEqual(['p2']);
     });
 
     it('covers thinking request fields and retries when providers reject them; retries without response_format when provider rejects it and skips on subsequent requests', async () => {
@@ -1249,6 +1251,7 @@ describe('OpenAICompatibleService.translateStream', () => {
     expect(result.translations.get('p1')).toBe('Xin chào');
     // p2 falls back to its original text.
     expect(result.translations.get('p2')).toBe('World');
+    expect([...(result.backfilledIds ?? [])]).toEqual(['p2']);
     }
   });
 
