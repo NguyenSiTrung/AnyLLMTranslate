@@ -38,6 +38,7 @@ export type MessageAction =
   | 'SUBTITLE_CHUNK_FAILED'
   | 'PRIORITIZE_SUBTITLE_CHUNK'
   | 'CANCEL_SUBTITLE_SESSION'
+  | 'CANCEL_PAGE_TRANSLATE'
   | 'SUBTITLE_TRACKS_AVAILABLE'
   | 'SELECT_SUBTITLE_TRACK'
   | 'GET_AVAILABLE_TRACKS'
@@ -109,6 +110,13 @@ export interface TranslationPiecePayload {
 /** Restore request from popup/content → background */
 export interface RestoreMessage {
   action: 'restore';
+  tabId?: number;
+}
+
+/** Abort in-flight non-streaming page `translate` work (Content/Popup → Background, FR-12).
+ *  From a content frame it cancels that frame; with only `tabId`, every frame of the tab. */
+export interface CancelPageTranslateMessage {
+  action: 'CANCEL_PAGE_TRANSLATE';
   tabId?: number;
 }
 
@@ -818,6 +826,7 @@ export type ExtensionMessage =
   | SubtitleChunkTranslatedMessage
   | PrioritizeSubtitleChunkMessage
   | CancelSubtitleSessionMessage
+  | CancelPageTranslateMessage
   | SubtitleTracksAvailableMessage
   | SelectSubtitleTrackMessage
   | GetAvailableTracksMessage

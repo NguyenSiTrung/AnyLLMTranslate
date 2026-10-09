@@ -1154,3 +1154,82 @@ describe('handleTranslate — duplicate rehydration on canonical failure', () =>
     ]);
   });
 });
+
+describe('handleTranslate — abortable non-streaming translate (FR-12)', () => {
+  let cacheTranslation: ReturnType<typeof vi.fn>;
+  let fetchCalls: number;
+
+  /** fetch that hangs until its signal aborts, then rejects like the browser. */
+  function stubHangingFetch(): void {
+    fetchCalls = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: string, init?: RequestInit) => {
+        fetchCalls++;
+        return new Promise((_resolve, reject) => {
+          const abort = () => reject(new DOMException('The operation was aborted.', 'AbortError'));
+          if (init?.signal?.aborted) abort();
+          init?.signal?.addEventListener('abort', abort);
+        });
+      }),
+    );
+  }
+
+  const sender = (tabId: number, frameId = 0) =>
+    ({ tab: { id: tabId }, frameId }) as chrome.runtime.MessageSender;
+
+  beforeEach(async () => {
+    delete mockStorage['anyllm-translate-settings'];
+    vi.clearAllMocks();
+    __resetTranslationServiceForTest();
+    __resetSettingsCacheForTest();
+    const mod = await import('@/services/cacheManager');
+    (mod.getCachedTranslation as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    cacheTranslation = mod.cacheTranslation as ReturnType<typeof vi.fn>;
+    stubHangingFetch();
+  });
+
+  it.each([
+    ['restore', { action: 'restore' as const }],
+    ['CANCEL_PAGE_TRANSLATE', { action: 'CANCEL_PAGE_TRANSLATE' as const }],
+  ])('%s aborts the tab request: cancelled, no cache write, no failover', async (_name, cancel) => {
+    const pending = handleMessage(buildMsg([{ id: 'p1', text: 'Hello' }]), sender(7)) as Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    await vi.waitFor(() => expect(fetchCalls).toBe(1));
+
+    await handleMessage(cancel as never, sender(7));
+    const result = await pending;
+
+    expect(result).toMatchObject({ success: false, error: 'cancelled' });
+    expect(fetchCalls).toBe(1);
+    expect(cacheTranslation).not.toHaveBeenCalled();
+  });
+
+  it('cancels only the sending frame; tab-wide restore cancels any frame; later requests run', async () => {
+    type Result = { success: boolean; error?: string };
+    let subSettled = false;
+    const sub = (handleMessage(buildMsg([{ id: 'b', text: 'Frame text' }]), sender(9, 3)) as Promise<Result>)
+      .finally(() => { subSettled = true; });
+    await vi.waitFor(() => expect(fetchCalls).toBe(1));
+
+    // Another frame's Stop leaves this frame's request running.
+    await handleMessage({ action: 'CANCEL_PAGE_TRANSLATE' } as never, sender(9, 0));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(subSettled).toBe(false);
+
+    await handleMessage({ action: 'CANCEL_PAGE_TRANSLATE' } as never, sender(9, 3));
+    expect(await sub).toMatchObject({ success: false, error: 'cancelled' });
+
+    // The popup's restore (tabId, no sender tab) cancels every frame.
+    const top = handleMessage(buildMsg([{ id: 'a', text: 'Top text' }]), sender(9, 0)) as Promise<Result>;
+    await vi.waitFor(() => expect(fetchCalls).toBe(2));
+    await handleMessage({ action: 'restore', tabId: 9 } as never, {} as chrome.runtime.MessageSender);
+    expect(await top).toMatchObject({ success: false, error: 'cancelled' });
+
+    mockFetchTranslation({ translations: { c: 'Xin chào' } });
+    const fresh = await handleMessage(buildMsg([{ id: 'c', text: 'Hello again' }]), sender(9, 0));
+    expect(fresh).toMatchObject({ success: true, results: [{ id: 'c', translatedText: 'Xin chào' }] });
+  });
+});

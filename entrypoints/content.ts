@@ -1337,6 +1337,16 @@ export async function startTranslation(): Promise<void> {
 
 function teardownPageTranslationSession(): void {
   churnGuard.reset();
+  // FR-12: abort this frame's in-flight non-streaming translate work so a
+  // dropped session spends no further LLM calls (responses are already
+  // ignored by the session guard).
+  if (activeRequests > 0 || inFlightPieceIds.size > 0) {
+    try {
+      chrome.runtime.sendMessage({ action: 'CANCEL_PAGE_TRANSLATE' }).catch(() => {});
+    } catch {
+      /* extension context invalidated */
+    }
+  }
   if (viewportObserver) {
     viewportObserver.disconnect();
     viewportObserver = null;

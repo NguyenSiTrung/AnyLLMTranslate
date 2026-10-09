@@ -120,3 +120,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Gotchas: freezing must filter three paths — forced roots, normal roots (the watcher delivers the frozen element itself once its markers are gone) and extracted pieces whose parent is frozen.
   - Patterns: lifecycle churn tests build each mocked piece from the live text node so `isPieceSourceUnchanged` sees the real detach on `textContent =`.
 ---
+
+## [2026-10-09] - Phase 3 Task 4: Abortable non-streaming translate (FR-12)
+- **Implemented:** `webTranslateControllers` (tab → frame → AbortController) in services/background.ts; the `translate` action passes `{ signal }` to `handleTranslate`, whose existing cancellation path (throwIfCancelled, raceWithAbort, pool `isCancelled` no-failover, no cache write) now covers non-streaming too. `restore` / new `CANCEL_PAGE_TRANSLATE` abort the sending frame, or every frame when only `tabId` is given (popup); tab close aborts all. Content `teardownPageTranslationSession` sends `CANCEL_PAGE_TRANSLATE` when requests are in flight.
+- **Files changed:** services/background.ts, types/messages.ts, entrypoints/content.ts, services/__tests__/background.translate.test.ts, content/__tests__/webTranslateLifecycle.test.ts
+- **Learnings:**
+  - Patterns: key cancellation by frame as well as tab — a subframe's Stop must not abort the top frame's work; a lazily recreated controller (replace when aborted) serves a new session without explicit registration/cleanup per request.
+  - Gotchas: the request semaphore serializes page translate in tests — cancellation tests must not assume two concurrent fetches.
+---

@@ -56,10 +56,10 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 3.3: Live-text churn freeze (FR-11)
   - [x] Test: element changed 5×/60 s → ≤3 requests, then frozen; translation removed on freeze; reset on Stop/Start
   - [x] Implement a churn WeakMap in the mutation callback (`content.ts:1483+`)
-- [ ] Task 3.4: Abortable non-streaming translate (FR-12)
-  - [ ] Test (background): `restore` / `CANCEL_PAGE_TRANSLATE` aborts the per-tab controller; `handleTranslate` sees an aborted signal, no cache write, no failover
-  - [ ] Test (content): Stop sends the cancel; late response writes nothing (existing session guard)
-  - [ ] Implement per-tab `webTranslateControllers` in `services/background.ts`; pass `{ signal }` execution to `handleTranslate` for the `translate` action
+- [x] Task 3.4: Abortable non-streaming translate (FR-12)
+  - [x] Test (background): `restore` / `CANCEL_PAGE_TRANSLATE` aborts the per-tab controller; `handleTranslate` sees an aborted signal, no cache write, no failover
+  - [x] Test (content): Stop sends the cancel; late response writes nothing (existing session guard)
+  - [x] Implement per-tab `webTranslateControllers` in `services/background.ts`; pass `{ signal }` execution to `handleTranslate` for the `translate` action
 - [ ] Task: Automated phase gate 'Phase 3: Cost and reliability' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
 
 ## Phase 4: Memory and performance

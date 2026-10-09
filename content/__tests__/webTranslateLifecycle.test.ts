@@ -1047,6 +1047,50 @@ describe('webTranslateLifecycle', () => {
       });
     });
 
+    describe('FR-12: Stop cancels in-flight non-streaming translate', () => {
+      it('sends CANCEL_PAGE_TRANSLATE while a request is in flight; the late response writes nothing', async () => {
+        const display = await import('@/content/translationDisplay');
+        vi.mocked(display.applyTranslation).mockClear();
+        vi.mocked(display.setErrorState).mockClear();
+        loadSettingsCached.mockResolvedValue(settingsWithConsent({
+          ...defaultSettings(),
+          enableStreamingTranslation: false,
+        }));
+        let answer: (r: unknown) => void = () => {};
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockImplementation((msg) =>
+          msg?.action === 'translate'
+            ? new Promise((resolve) => { answer = resolve; })
+            : Promise.resolve({}),
+        );
+
+        const piece = makePiece('p1', 'Hello world');
+        const run = testHooks.translatePieces([piece]);
+        await vi.waitFor(() =>
+          expect(sendMessage.mock.calls.some(([m]) => m?.action === 'translate')).toBe(true),
+        );
+
+        await testHooks.stopTranslationAsync();
+        const actions = sendMessage.mock.calls.map(([m]) => m?.action);
+        expect(actions).toContain('CANCEL_PAGE_TRANSLATE');
+        expect(actions.indexOf('CANCEL_PAGE_TRANSLATE')).toBeLessThan(actions.lastIndexOf('restore'));
+
+        // The background answers the aborted request late; nothing is written.
+        answer({ success: true, results: [{ id: 'p1', translatedText: 'Xin chào' }] });
+        await run;
+        expect(display.applyTranslation).not.toHaveBeenCalled();
+        expect(display.setErrorState).not.toHaveBeenCalled();
+        expect(piece.isTranslated).toBe(false);
+      });
+
+      it('does not send CANCEL_PAGE_TRANSLATE when nothing is in flight', async () => {
+        const sendMessage = runtimeSendMessage();
+        sendMessage.mockClear();
+        await testHooks.stopTranslationAsync();
+        expect(sendMessage.mock.calls.map(([m]) => m?.action)).not.toContain('CANCEL_PAGE_TRANSLATE');
+      });
+    });
+
     it('bedw: marked back-fill shows incomplete error; a genuine source echo still applies', async () => {
       // Regression: back-fill detection must use the explicit `backfilled`
       // marker, not `partial && translatedText === piece.text` — the latter

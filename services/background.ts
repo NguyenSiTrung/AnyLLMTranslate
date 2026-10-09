@@ -320,6 +320,55 @@ function sessionGenerationFor(tabId: number): number {
 }
 
 /**
+ * FR-12: in-flight non-streaming page `translate` work, keyed by tab then
+ * frame. Stop/restore, CANCEL_PAGE_TRANSLATE and tab close abort it, so a
+ * cancelled request spends no further LLM calls, writes no cache entries for
+ * unfinished batches, and never fails over to another provider.
+ */
+const webTranslateControllers = new Map<number, Map<number, AbortController>>();
+
+/** The live abort signal for this sender's frame (undefined without a tab). */
+function webTranslateSignal(sender?: chrome.runtime.MessageSender): AbortSignal | undefined {
+  const tabId = sender?.tab?.id;
+  if (typeof tabId !== 'number') return undefined;
+  const frameId = sender?.frameId ?? 0;
+  let frames = webTranslateControllers.get(tabId);
+  if (!frames) {
+    frames = new Map();
+    webTranslateControllers.set(tabId, frames);
+  }
+  let controller = frames.get(frameId);
+  if (!controller || controller.signal.aborted) {
+    controller = new AbortController();
+    frames.set(frameId, controller);
+  }
+  return controller.signal;
+}
+
+/** Abort one frame's page translate work, or every frame's when `frameId` is undefined. */
+function cancelWebTranslate(tabId: number, frameId?: number): void {
+  const frames = webTranslateControllers.get(tabId);
+  if (!frames) return;
+  for (const [id, controller] of frames) {
+    if (frameId !== undefined && id !== frameId) continue;
+    controller.abort();
+    frames.delete(id);
+  }
+  if (frames.size === 0) webTranslateControllers.delete(tabId);
+}
+
+/** Cancel for a restore/cancel message: the sending frame, or the whole tab
+ *  when the popup names it by `tabId`. */
+function cancelWebTranslateFor(
+  message: { tabId?: number },
+  sender: chrome.runtime.MessageSender,
+): void {
+  const tabId = message.tabId ?? sender.tab?.id;
+  if (typeof tabId !== 'number') return;
+  cancelWebTranslate(tabId, sender.tab ? (sender.frameId ?? 0) : undefined);
+}
+
+/**
  * In-flight subtitle AI re-align runs keyed by origin tab. The Stop button (and any
  * other cancel path) sends CANCEL_SUBTITLE_SESSION, which aborts the run so no
  * further LLM batches are spent and the in-flight request is dropped.
@@ -423,6 +472,7 @@ export function initSubtitleSessionCleanup(): void {
   chrome.tabs.onRemoved.addListener((tabId: number) => {
     stopSubtitleSession(tabId);
     translatedTabSessions.delete(tabId);
+    cancelWebTranslate(tabId);
     // PDF viewer keep-alive cleanup: closing a viewer tab must deregister its
     // session so the SW keep-alive alarm can clear once no viewers remain.
     unregisterPdfSession(tabId);
@@ -3206,7 +3256,7 @@ function dispatchMessage(
 ): Promise<unknown> | undefined {
   switch (message.action) {
     case 'translate':
-      return handleTranslate(message, _sender);
+      return handleTranslate(message, _sender, { signal: webTranslateSignal(_sender) });
     case 'testConnection':
       return handleTestConnection();
     case 'GET_POOL_KEY_STATUSES':
@@ -3233,6 +3283,7 @@ function dispatchMessage(
       // Clear page translation session tracking and stop any active subtitle
       // session for this tab so progressive chunk work and the keep-alive alarm
       // do not outlive the restore.
+      cancelWebTranslateFor(message, _sender);
       const restoreTabId = message.tabId ?? _sender.tab?.id;
       if (restoreTabId) {
         translatedTabSessions.delete(restoreTabId);
@@ -3240,6 +3291,9 @@ function dispatchMessage(
       }
       return undefined;
     }
+    case 'CANCEL_PAGE_TRANSLATE':
+      cancelWebTranslateFor(message, _sender);
+      return undefined;
     case 'CANCEL_SUBTITLE_SESSION': {
       const cancelTabId = message.tabId ?? _sender.tab?.id;
       if (cancelTabId) stopSubtitleSession(cancelTabId);
