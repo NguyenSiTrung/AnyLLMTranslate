@@ -7,6 +7,7 @@
 import type { TranslationPiece } from '@/types/translation';
 import type { PageContext } from '@/types/config';
 import { extractPieces, type ExtractOptions } from '@/content/domWalker';
+import { joinGroupText } from '@/content/pieceText';
 import { MutationWatcher } from '@/content/mutationWatcher';
 import { ViewportObserver } from '@/content/viewportObserver';
 import {
@@ -253,10 +254,7 @@ function isPieceSourceUnchanged(piece: TranslationPiece): boolean {
     ) {
       return false;
     }
-    const live = piece.textNodes
-      .map((node) => node.textContent ?? '')
-      .join('')
-      .trim();
+    const live = joinGroupText(piece.textNodes).trim();
     return live === baseline;
   }
   return liveSourceText(piece.parentElement) === baseline;

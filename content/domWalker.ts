@@ -7,6 +7,7 @@
 import type { TranslationPiece } from '@/types/translation';
 import { deduplicateAncestors, matchesCached, classifyInArticle, findAsideRegionRoot } from '@/lib/domUtils';
 import { registerShadowRoots } from './shadowDomRoots';
+import { joinGroupText } from './pieceText';
 import { encodeInlineHtml } from '@/lib/richTranslate';
 import { BLOCK_ELEMENTS, SKIP_ELEMENTS, INLINE_ELEMENTS, MAX_PIECE_CHARS, DATA_ATTRS, BODY_TRANSLATE_TAGS, ASIDE_MAX_TEXT_PER_PARAGRAPH, ASIDE_MAX_TEXT_PER_REGION } from '@/lib/constants';
 
@@ -206,7 +207,7 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
   function flushPiece(): void {
     if (currentTextNodes.length === 0 || !currentParent) return;
 
-    const text = currentTextNodes.map((n) => n.textContent ?? '').join('');
+    const text = joinGroupText(currentTextNodes);
     const trimmed = text.trim();
 
     // Skip empty or whitespace-only text

@@ -9,9 +9,9 @@ Each task is TDD: write the failing test → implement → run the affected suit
 <!-- depends: -->
 <!-- files: content/domWalker.ts, lib/richTranslate.ts, types/config.ts, related tests -->
 
-- [ ] Task 1.1: `<br>` → `\n` in plain piece text (FR-3)
-  - [ ] Test: `Plain<br>break` → `Plain\nbreak`; multiple `<br>` collapse sensibly; `sourceText` baseline matches what `isPieceSourceUnchanged` recomputes
-  - [ ] Implement in `extractPieces` walk (track BR between text nodes of the current group) and keep `isPieceSourceUnchanged` consistent
+- [x] Task 1.1: `<br>` → `\n` in plain piece text (FR-3)
+  - [x] Test: `Plain<br>break` → `Plain\nbreak`; multiple `<br>` collapse sensibly; `sourceText` baseline matches what `isPieceSourceUnchanged` recomputes
+  - [x] Implement in `extractPieces` walk (track BR between text nodes of the current group) and keep `isPieceSourceUnchanged` consistent
 - [ ] Task 1.2: Group-scoped rich encoding (FR-1)
   - [ ] Test: nested-list probe yields `Item <z id="0">here</z>`; excluded/`translate="no"`/`pre` subtree inside anchor never appears in rich text; multi-group parent (`Text A <p>…</p> Text B`) encodes each group separately
   - [ ] Implement a node-based encoder in `lib/richTranslate.ts` (`encodeInlineNodes(textNodes, anchor)`) and switch `domWalker.ts:255` to it; keep `encodeInlineHtml` for other callers or remove if unused

@@ -22,3 +22,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-10-09] - Phase 1 Task 1.1: `<br>` → `\n` in plain piece text (FR-3)
+- **Implemented:** `content/pieceText.ts` `joinGroupText()` / `groupSeparator()` — one `\n` per `<br>` between adjacent group text nodes (capped at 2), found by a bounded document-order scan. Used by `extractPieces` and by `isPieceSourceUnchanged` in `entrypoints/content.ts`.
+- **Files changed:** content/pieceText.ts (new), content/domWalker.ts, entrypoints/content.ts, content/__tests__/domWalker.hardening.test.ts (new)
+- **Learnings:**
+  - Gotchas: `webTranslateLifecycle.test.ts` `vi.doMock`s `@/content/domWalker` as `{ extractPieces }` only — any new helper content.ts needs from the walker must live in a separate module (hence `pieceText.ts`).
+  - Patterns: the extraction baseline (`sourceText`) and the sm7n live recompute must use one shared join function, or every `<br>` paragraph invalidates on the first mutation.
+---
