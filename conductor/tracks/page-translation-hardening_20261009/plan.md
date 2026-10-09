@@ -90,6 +90,6 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 5.4: Explicit backfill ids (FR-19)
   - [x] Test: partial response with a genuine source-identical translation is not marked backfilled
   - [x] Add `backfilledIds` to `TranslationResult` in `services/openaiCompatible.ts`; consume it in `handleTranslate`
-- [ ] Task 5.5: Small cleanups (FR-20)
-  - [ ] `data-anyllm-walked` → WeakSet (or remove); `VIEWPORT_MARGIN`-derived margin; O(n) `deduplicateAncestors` for same-tree inputs
+- [x] Task 5.5: Small cleanups (FR-20)
+  - [x] `data-anyllm-walked` → WeakSet (or remove); `VIEWPORT_MARGIN`-derived margin; O(n) `deduplicateAncestors` for same-tree inputs
 - [ ] Task: Automated phase gate 'Phase 5: Lifecycle and small fixes' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification

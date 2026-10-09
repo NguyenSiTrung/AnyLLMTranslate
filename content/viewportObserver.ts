@@ -284,16 +284,13 @@ export class ViewportObserver {
   /**
    * After unpausing, targets still in pieceMap that are on-screen never re-fire
    * IntersectionObserver (no threshold cross). Manually queue untranslated ones.
+   * FR-20: "on-screen" is the near IO's membership (VIEWPORT_MARGIN), so the
+   * margin cannot drift and no layout is read.
    */
   private redispatchVisible(): void {
     const toDispatch: TranslationPiece[] = [];
     for (const [target, pieces] of [...this.pieceMap.entries()]) {
-      const rect = target.getBoundingClientRect();
-      const margin = 200; // keep in sync with VIEWPORT_MARGIN roughly
-      const visible =
-        rect.bottom >= -margin &&
-        rect.top <= (typeof window !== 'undefined' ? window.innerHeight : 0) + margin;
-      if (!visible) continue;
+      if (!this.nearTargets.has(target)) continue;
 
       const untranslated = pieces.filter(
         (piece) => !piece.isTranslated && !this.dispatchedIds.has(piece.id),

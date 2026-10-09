@@ -197,3 +197,11 @@ From Beads memory `subtitle-chunk-retry-classification`:
 - **Learnings:**
   - Gotchas: `background.streamStats` flakes on different tests from run to run (seen on two tests this session); always rerun it in isolation before blaming a change.
 ---
+
+## [2026-10-09] - Phase 5 Task 5: Small cleanups (FR-20)
+- **Implemented:** removed the never-read `data-anyllm-walked` write from `extractPieces` (it also caused attribute mutation records on site elements). `redispatchVisible` reads near-IO membership (rootMargin `VIEWPORT_MARGIN`) instead of a hardcoded 200 px `getBoundingClientRect` check. `deduplicateAncestors` compares each element with the last kept element of its own tree (`getRootNode()`), O(n).
+- **Files changed:** content/domWalker.ts, content/viewportObserver.ts, lib/domUtils.ts, content/__tests__/domWalker.hardening.test.ts, content/__tests__/observers.test.ts, lib/__tests__/dom.test.ts
+- **Learnings:**
+  - Gotchas: the audit-v2 "P0 regression" for `deduplicateAncestors` was not reachable — the input is sorted into preorder first, and in preorder everything between an ancestor and its descendant is itself inside the ancestor. The only real hazard is mixing trees, since `contains` never crosses a shadow boundary.
+  - Patterns: the near-IO Set from FR-15 replaced both the status geometry and the unpause geometry; parsing `VIEWPORT_MARGIN` was unnecessary once the IO itself carries the margin.
+---

@@ -480,10 +480,5 @@ export function extractPieces(root: Element = document.body, options: ExtractOpt
     }
   }
 
-  // FR-17: mark walked root so mutation path can skip clean subtrees.
-  if (root.nodeType === Node.ELEMENT_NODE) {
-    (root as Element).setAttribute('data-anyllm-walked', '1');
-  }
-
   return pieces;
 }

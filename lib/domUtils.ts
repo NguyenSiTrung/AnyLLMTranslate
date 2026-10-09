@@ -109,16 +109,17 @@ export function deduplicateAncestors(elements: Element[]): Element[] {
     return 0;
   });
 
-  const result: Element[] = [sorted[0]];
-  for (let i = 1; i < sorted.length; i++) {
-    // P0: check against EVERY kept ancestor, not just the last one. The previous
-    // `result[result.length - 1].contains(el)` check missed descendants of an
-    // earlier-kept element when a sibling appeared between them in DOM order:
-    // sorted [A, B, C] with A⊇C but B a sibling kept C incorrectly because it
-    // only compared against B (the last pushed).
-    if (!result.some((r) => r.contains(sorted[i]))) {
-      result.push(sorted[i]);
-    }
+  // FR-20: in document (pre)order everything between a kept ancestor and its
+  // descendant lies inside that ancestor, so comparing with the last element
+  // kept IN THE SAME TREE is enough — O(n). `contains` never crosses a shadow
+  // boundary, so each tree (document or shadow root) is tracked on its own.
+  const lastKeptByTree = new Map<Node, Element>();
+  const result: Element[] = [];
+  for (const el of sorted) {
+    const tree = el.getRootNode();
+    if (lastKeptByTree.get(tree)?.contains(el)) continue;
+    lastKeptByTree.set(tree, el);
+    result.push(el);
   }
 
   return result;

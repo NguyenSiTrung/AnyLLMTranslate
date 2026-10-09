@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { matchesCached, __resetMatchCacheForTest, classifyInArticle } from '../domUtils';
+import { matchesCached, __resetMatchCacheForTest, classifyInArticle, deduplicateAncestors } from '../domUtils';
+import { vi } from 'vitest';
 import {
   sortByReadingStripPriority,
   isHeadingElement,
@@ -89,6 +90,39 @@ describe('domUtils', () => {
     deep.appendChild(div1);
     document.body.appendChild(deep);
     expect(classifyInArticle(span)).toBe(true);
+  });
+});
+
+describe('deduplicateAncestors (FR-20)', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('drops descendants and duplicates, keeping outermost elements in DOM order', () => {
+    document.body.innerHTML = '<div id="a"><p id="c"><b id="d"></b></p></div><div id="b"></div>';
+    const [a, b, c, d] = ['a', 'b', 'c', 'd'].map((id) => document.getElementById(id)!);
+    expect(deduplicateAncestors([d, b, c, a, b])).toEqual([a, b]);
+  });
+
+  it('does O(n) contains checks for same-tree inputs', () => {
+    const items = Array.from({ length: 2_000 }, () => document.createElement('p'));
+    document.body.append(...items);
+    const containsSpy = vi.spyOn(Node.prototype, 'contains');
+    expect(deduplicateAncestors([...items].reverse())).toHaveLength(2_000);
+    expect(containsSpy.mock.calls.length).toBeLessThan(2 * items.length);
+    containsSpy.mockRestore();
+  });
+
+  it('deduplicates each shadow tree on its own (contains never crosses the boundary)', () => {
+    const host = document.createElement('div');
+    const light = document.createElement('p');
+    document.body.append(host, light);
+    const shadow = host.attachShadow({ mode: 'open' });
+    shadow.innerHTML = '<section><span></span></section>';
+    const section = shadow.querySelector('section')!;
+    const span = shadow.querySelector('span')!;
+    const kept = deduplicateAncestors([span, light, section, host]);
+    expect(new Set(kept)).toEqual(new Set([host, light, section]));
   });
 });
 

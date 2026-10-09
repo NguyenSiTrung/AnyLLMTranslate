@@ -216,14 +216,15 @@ describe('ViewportObserver', () => {
     const pausedVisible = vi.fn();
     const pausedObserver = new ViewportObserver(pausedVisible, 50);
     const pausedP = document.createElement('p');
-    // jsdom getBoundingClientRect defaults to all zeros — treat as visible
-    // with our margin check (bottom >= -200 && top <= height+200).
-    document.body.appendChild(pausedP);
+    const offscreenP = document.createElement('p');
+    document.body.append(pausedP, offscreenP);
     const pausedPiece = makePiece('a', pausedP);
     pausedObserver.observe(pausedPiece);
+    pausedObserver.observe(makePiece('far', offscreenP));
     pausedObserver.setPaused(true);
 
-    const pausedMock = MockIntersectionObserver.instances.at(-1)!;
+    const [pausedNear, , pausedMock] = MockIntersectionObserver.instances.slice(-3);
+    pausedNear.fire(pausedP, true);
     pausedMock.fire(pausedP, true);
     vi.advanceTimersByTime(50);
 
@@ -231,11 +232,16 @@ describe('ViewportObserver', () => {
     // Still tracked
     expect(pausedMock.observed.has(pausedP)).toBe(true);
 
+    // FR-20: "visible" on unpause is near-IO membership (VIEWPORT_MARGIN), not
+    // a hardcoded-margin layout read.
+    const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     pausedObserver.setPaused(false);
     vi.advanceTimersByTime(50);
+    expect(rectSpy).not.toHaveBeenCalled();
+    rectSpy.mockRestore();
 
     expect(pausedVisible).toHaveBeenCalledTimes(1);
-    expect(pausedVisible.mock.calls[0][0][0].id).toBe('a');
+    expect(pausedVisible.mock.calls[0][0].map((p: TranslationPiece) => p.id)).toEqual(['a']);
     pausedObserver.disconnect();
   });
 

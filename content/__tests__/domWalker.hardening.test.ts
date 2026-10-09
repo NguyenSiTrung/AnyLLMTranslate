@@ -210,3 +210,18 @@ describe('domWalker — visually-block custom elements split pieces (FR-6)', () 
     }
   });
 });
+
+describe('domWalker — no site-DOM bookkeeping attributes (FR-20)', () => {
+  it('walking a root writes no data-anyllm-walked attribute (and no attribute mutation)', async () => {
+    setBody('<main><p>Hello world</p></main>');
+    const main = document.querySelector('main')!;
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver((r) => records.push(...r));
+    observer.observe(document.body, { attributes: true, subtree: true });
+    expect(extractPieces(main)).toHaveLength(1);
+    await Promise.resolve();
+    observer.disconnect();
+    expect(document.querySelector('[data-anyllm-walked]')).toBeNull();
+    expect(records.filter((r) => r.attributeName === 'data-anyllm-walked')).toEqual([]);
+  });
+});
