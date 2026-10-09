@@ -160,3 +160,9 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Patterns: membership is tracked per target with a piece Set so `unobserve` (FR-13) detaches the membership IOs once the last piece on a target goes — no detached-target leak.
   - Context: `redispatchVisible` still reads geometry; Task 5.5 can switch it to `nearTargets`.
 ---
+
+## [2026-10-09] - Phase 4 gate: Memory and performance
+- **Result:** tsc 0, lint 37 (baseline 38), tracked tests 824/824. The untracked `.review-scratch` repro file (20 tests, 8 intentionally failing) is excluded.
+- **Learnings:**
+  - Gotchas: the Phase 3 gate note's "829/829" counted 12 passing scratch tests; tracked was 817 then. Count tracked tests with `vitest run --exclude '.review-scratch/**'`, not total minus failures.
+---

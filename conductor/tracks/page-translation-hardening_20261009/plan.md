@@ -74,7 +74,7 @@ Each task is TDD: write the failing test → implement → run the affected suit
 - [x] Task 4.3: Throttled, layout-free status (FR-15)
   - [x] Test: 20 rapid status triggers → ≤2 broadcasts; no `getBoundingClientRect` calls on status computation
   - [x] Track visible parents from IntersectionObserver entries; throttle `sendStatusUpdate`; reuse for look-ahead
-- [ ] Task: Automated phase gate 'Phase 4: Memory and performance' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
+- [x] Task: Automated phase gate 'Phase 4: Memory and performance' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
 
 ## Phase 5: Lifecycle and small fixes
 
