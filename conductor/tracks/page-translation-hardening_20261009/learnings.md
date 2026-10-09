@@ -128,3 +128,9 @@ From Beads memory `subtitle-chunk-retry-classification`:
   - Patterns: key cancellation by frame as well as tab — a subframe's Stop must not abort the top frame's work; a lazily recreated controller (replace when aborted) serves a new session without explicit registration/cleanup per request.
   - Gotchas: the request semaphore serializes page translate in tests — cancellation tests must not assume two concurrent fetches.
 ---
+
+## [2026-10-09] - Phase 3 gate: Cost and reliability
+- **Result:** tsc 0; lint 38; every tracked test file green (829/829).
+- **Learnings:**
+  - Gotchas: vitest's include glob picks up untracked scratch dirs (`.review-scratch/__tests__/repro.test.ts` — intentional failing repros from another review). Read the FAIL paths before treating a gate as red; never delete or stage another session's scratch files.
+---

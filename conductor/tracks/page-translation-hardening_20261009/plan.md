@@ -60,7 +60,8 @@ Each task is TDD: write the failing test → implement → run the affected suit
   - [x] Test (background): `restore` / `CANCEL_PAGE_TRANSLATE` aborts the per-tab controller; `handleTranslate` sees an aborted signal, no cache write, no failover
   - [x] Test (content): Stop sends the cancel; late response writes nothing (existing session guard)
   - [x] Implement per-tab `webTranslateControllers` in `services/background.ts`; pass `{ signal }` execution to `handleTranslate` for the `translate` action
-- [ ] Task: Automated phase gate 'Phase 3: Cost and reliability' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
+<!-- gate 2026-10-09: tsc 0; lint 38 (baseline); pnpm test: all 121 tracked files green (829/829). The only red file is untracked .review-scratch/__tests__/repro.test.ts (8 intentional bug repros, created 21:29 outside this track; not staged) -->
+- [x] Task: Automated phase gate 'Phase 3: Cost and reliability' — `pnpm test` (known flaky files per workflow.md) + `pnpm lint` (≤38 errors); no manual verification
 
 ## Phase 4: Memory and performance
 
