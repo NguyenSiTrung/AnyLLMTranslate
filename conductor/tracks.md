@@ -1,5 +1,5 @@
-<!-- conductor-archive: 2026-08-04 youtube-link-prealign_20260804 archived (73 archived / 0 active) -->
-<!-- conductor-refresh: 2026-10-05 all (73 archived / 0 active Conductor tracks; unchanged since 2026-08-04. Beads is now 0 open / 0 in progress / 535 closed after the 2026-09-29 force-close sweep — most closed without a fix. No active plan.md checkboxes, so no directional sync applies.) -->
+<!-- conductor-archive: 2026-10-09 page-translation-hardening_20261009 archived (74 archived / 0 active) -->
+<!-- conductor-refresh: 2026-10-09 all (74 archived / 0 active Conductor tracks. Repaired this file: the 2026-10-09 archive commit dropped the active entry but never added the archived ✅ line and left a duplicate empty "## Active Tracks" heading. Beads 1 open (AnyLLMTranslate-slmv, streamStats flake) / 0 in progress / 566 closed. No active plan.md checkboxes, so no directional sync applies.) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
@@ -85,6 +85,7 @@ This file tracks all major tracks for the project.
 - ✅ **Scientific PDF Backend (layout-preserving local bridge)** (`scientific-pdf-backend_20260717`) — Archived 2026-07-17. Optional Scientific / PDF Translate mode via Docker pdf2zh bridge; same provider pool credentials per-job; setup wizard + Docker helper scripts; bridge-only viewer path; mono/dual/side-by-side job modal. 6 phases; Beads epic `AnyLLMTranslate-17v`. [View](./conductor/archive/scientific-pdf-backend_20260717/)
 - ✅ **Web Translate Lifecycle & Bilingual Display Hardening** (`web-translate-hardening_20260720`) — Archived 2026-07-20. P0 lifecycle (session/stream/stop/resume), cache fingerprint, piece registry, langDetect skip bar, site-rule specificity, blocklist boundary, a11y retry; 638 tests. Beads epic `AnyLLMTranslate-5x6`. [View](./conductor/archive/web-translate-hardening_20260720/)
 - ✅ **YouTube Link AI Pre-Align from Settings** (`youtube-link-prealign_20260804`) — Archived 2026-08-04. Paste a YouTube URL in Subtitle Studio → "Re-align from link" card to pre-warm the AI re-align cache ahead of playback (no translation). Pure `lib/youtubeWatchPage.ts` (balanced-brace `ytInitialPlayerResponse` extraction, ASR track selection, `fmt=json3` canonicalizer); `services/youtubeLinkPrealign.ts` DI-seamed orchestration (watch HTML → ASR track → json3 → units → cache check → pooled resegment → save with title/thumbnail, typed errors, single-flight dedupe shared with the playback path); proactive playback fetch canonicalized on `fmt=json3` for cache-key parity (hash-parity test); `REALIGN_YOUTUBE_URL` + runtime-broadcast progress; `*://*.youtube.com/*` static host permission. 52 new tests (633 total). Beads epic `AnyLLMTranslate-9r6`. [View](./conductor/archive/youtube-link-prealign_20260804/)
+- ✅ **Page Translation Hardening** (`page-translation-hardening_20261009`) — Archived 2026-10-09. 20 findings (iframe coverage out of scope), 5 phases. Extraction: `<br>` → newline, rich text built from the piece's own text nodes with decoded entities, `pre`/CodeMirror/Monaco skipped under smart excludes, CJK-aware tag-safe sentence splitting, visually-block custom elements split pieces. Display: LI/TD/TH children never re-parented, debounced translation-only copy sync. Reliability: auth/quota failures pause instead of auto-retrying, automatic retries never clear the provider pause, live-text churn freeze (>3 changes/60 s), Stop aborts in-flight non-streaming requests (`CANCEL_PAGE_TRANSLATE`, per-tab AbortController). Memory/perf: detached pieces released from observer and display, mutation flush indexed by parent/text node, IO-based status and look-ahead instead of layout reads. Lifecycle: pagehide/pageshow bfcache teardown and restore, SPA route resets term memory, web cache keyed by the serving slot (`servedBy`), explicit `backfilledIds`. 743 → 836 tests. [View](./conductor/archive/page-translation-hardening_20261009/)
 
 ---
 
@@ -93,7 +94,3 @@ This file tracks all major tracks for the project.
 *(none)*
 
 ---
-
----
-
-## Active Tracks

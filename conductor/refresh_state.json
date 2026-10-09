@@ -1,118 +1,45 @@
 {
-  "lastRefresh": "2026-10-06T18:17:43+00:00",
+  "lastRefresh": "2026-10-09T22:30:00+07:00",
   "scope": "all",
-  "reviewedHead": "1c99463",
+  "reviewedHead": "e1f12be",
   "previousRefresh": {
-    "at": "2026-09-30T01:15:03+07:00",
-    "head": "2b82e1e"
+    "at": "2026-10-06T18:17:43+00:00",
+    "head": "1c99463"
   },
   "changes": [
-    "Scope: full refresh ('/conductor-refresh' with no argument; scope 'all' matches every prior refresh). Window reviewed: 2b82e1e..1c99463 = 3 non-refresh commits (029853b remove CLAUDE.md, 4b93059 beads export sync, e1cc954 + 1c99463 README resync) plus this refresh's own fix. NO source file changed in the window — no file under lib/, services/, content/, inject/, entrypoints/, types/, stores/ or styles/ was touched — so no product capability, dependency or tooling drift.",
-    "ACTION TAKEN (not just docs): deleted entrypoints/options/sections/__tests__/captionQualityPlus.test.tsx. Commit 945a388 documented renaming it to translationModeCard.test.tsx and staged the addition but NOT the deletion, so both files shipped and the stale copy imported CaptionQualityCard, whose Full-track toggle had moved to TranslationModeCard. That was the suite's only deterministic red: 2 hard failures at HEAD, 118 test files instead of 117. The replacement file is a strict superset (adds a disabled-state case), so removal cost no coverage. Suite after removal: 743/743 green across 117 files in 23.6 s.",
-    "product.md: header marker replaced; corrected the Current State test line (742/117 -> 743/117, green, and the flake claim 'both files pass in isolation' is FALSE — see verification); rewrote the Beads line (5 open / 2 in progress / 525 closed -> 0/0/535, listing all 9 force-closed ids with the note that most were closed WITHOUT a fix); 0-active-tracks line updated to 'seventh consecutive window'; new Page Translation bullet for auto-translate on page load (Always-translate site rule + dismissible notification bar with instant opt-out); Subtitle Plus bullet now names the Translation mode card and why it is not grouped with the YouTube-badged Caption quality card; mini-studio control list gained standard/full-track translation mode; packaging bullet extended with CLAUDE.md deletion + README resync; suite-history line gained the 2026-10-05 entry.",
-    "tech-stack.md: header marker replaced; quality snapshot replaced with the RERUN 2026-10-05 numbers (743/117 green in 23.6 s, file count 118->117 and why, both flake files fail in isolation, tsc 0, lint 38, build 3.92 MB) and explicitly notes coverage was NOT rerun because no source changed; new bullet recording that the window is test-file + docs churn only (so the 2026-09-28 coverage numbers still describe HEAD); dependency-drift counter advanced to the 8th consecutive clean window.",
-    "workflow.md: header marker replaced; added an 'Isolation is not proof of health' paragraph correcting the 2026-09-28 guidance with the measured isolated-failure rates; added a 'stale duplicate test file is a deterministic red that looks like a flake' paragraph with the 945a388 case; lint paragraph re-dated to 2026-10-05 and notes e140 was force-closed unfixed.",
-    "tracks.md: refresh marker replaced — verified still 73 archived / 0 active (unchanged since 2026-08-04); Beads count updated to 0/0/535. No active plan.md, so no directional sync applies.",
-    "patterns.md: header marker replaced; two new Gotchas (never-deleted rename = deterministic red; a green isolated run does not clear a flake, with the corrected claim and the n9ur premise warning); lint gotcha re-dated; footer 'Last refreshed' rewritten.",
-    "verification: pnpm test on 2026-10-05/06 after the deletion = 743 passed / 117 files / 0 failed in 23.57 s. Before the deletion the same run was 2 failed / 743 passed / 118 files, both failures in the stale file. Isolated flake characterisation: background.streamStats.test.ts run alone 6x = 3 fail / 3 pass with the failing CASE moving (dedup case vs batch-budget case); subtitleCoordinator.test.ts run alone 5x = 1 fail / 4 pass; background.translate.test.ts 6x = 6 pass. pnpm compile (tsc --noEmit) 0 errors. pnpm lint 38 errors (unchanged, per-file breakdown identical to 2026-09-28). pnpm build 3.92 MB WXT total, du 3.8M. bd dolt pull changed nothing; bd stats 0 open / 0 in progress / 535 closed; .beads/issues.jsonl matches the DB exactly (535 issue records closed, 6 memory records).",
-    "committed: conductor/*.md + conductor/refresh_state.json + the deleted test file. Per AGENTS.md Git Policy, conductor commits locally and git push/pull/fetch are never automatic — nothing pushed."
+    "Scope: full refresh (no argument; 'all' matches every prior refresh). Window 1c99463..e1f12be = 31 commits: c6b716b refresh, da8a7da stale-test delete, and the whole page-translation-hardening_20261009 track (newtrack, 20 fixes over 5 phases, checkpoints, complete, archive). 36 non-doc files changed (+2425/-449). No package.json, lockfile, config or CI changes.",
+    "tracks.md REPAIRED: archive commit e1f12be dropped the active entry but never added the archived ✅ line for page-translation-hardening_20261009, and left a duplicate empty '## Active Tracks' heading. Added the archived entry, removed the duplicate, and updated the archive marker to 74 archived / 0 active.",
+    "product.md: new Page Translation bullet summarising the hardening behaviours; Completed entry for the track; Current State updated (836/122 green, flake 4/6 tracked as slmv, ESLint 37 with per-file breakdown, 74 archived, Beads 1 open / 0 in progress / 566 closed).",
+    "tech-stack.md: quality snapshot replaced with the 2026-10-09 rerun; new source-shape bullet (churnGuard, pageLifecycle, pieceText, webTranslateRetry, CANCEL_PAGE_TRANSLATE, backfilledIds/servedBy, code-block smart excludes); 9th consecutive window with no dependency drift.",
+    "workflow.md: marker replaced; flake paragraph gains the 2026-10-09 rate (4/6) and the rule that a red streamStats run is not a gate failure only if a repeat full run is green.",
+    "patterns.md: marker and footer replaced; added one cross-track pattern (retry classifiers vs. negative-cache classifier, from 727f3a8 and page-translation-hardening). The archive commit had already elevated the track's own 4 patterns.",
+    "Beads: filed AnyLLMTranslate-slmv (P2 bug, streamStats flake), the successor to the force-closed n9ur. No plan.md drift: 0 active tracks."
   ],
   "codebaseHealth": {
-    "tests": 743,
-    "testFiles": 117,
-    "testsPassing": 743,
-    "testsFailing": 0,
-    "fullSuiteStatus": "Green: `pnpm test` on 2026-10-05 after deleting the stale duplicate test file = 743 passed / 0 failed across 117 files in 23.57 s. Before the deletion the identical command was 2 failed / 743 passed / 118 files, both failures confined to entrypoints/options/sections/__tests__/captionQualityPlus.test.tsx.",
-    "buildSize": "3.92 MB",
-    "buildSizeNote": "Rerun 2026-10-05 via `pnpm build` (WXT reported Σ 3.92 MB; `du -sh .output/chrome-mv3` = 3.8M). Unchanged from 2026-09-28 because no source changed.",
-    "coverage": {
-      "statements": "80.26%",
-      "branches": "77.40%",
-      "functions": "83.08%",
-      "note": "NOT rerun this refresh — no file under lib/, services/, content/, inject/, entrypoints/, types/, stores/ or styles/ changed in the window, so the 2026-09-28 V8 measurement still describes HEAD. Well above the >=70 % floor."
+    "tests": "836/836 green across 122 files on a clean full rerun (~25 s); the first full run had 1 failure in background.streamStats.test.ts",
+    "flake": "services/__tests__/background.streamStats.test.ts failed 4/6 isolated runs; the failing case moves between runs (AnyLLMTranslate-slmv)",
+    "tsc": 0,
+    "eslintErrors": 37,
+    "eslintBreakdown": {
+      "content/__tests__/webTranslateLifecycle.test.ts": 32,
+      "services/__tests__/background.plus.test.ts": 4,
+      "services/providerPool.ts:579": 1
     },
-    "coverageTarget": ">=70% statements (lowered from >=80% on 2026-09-11 by user decision; aligned in conductor/workflow.md, conductor/product.md, CONTRIBUTING.md)",
-    "lintErrors": 38,
-    "lintErrorsDetail": "NOT CLEAN — `pnpm lint` exit 1 with 38 errors, verified again at 2026-10-05. Breakdown is identical to the 2026-09-28 snapshot: 32 in content/__tests__/webTranslateLifecycle.test.ts (no-explicit-any x30, consistent-type-imports x2), 4 no-useless-escape in services/__tests__/background.plus.test.ts, 1 no-non-null-assertion at entrypoints/content.ts:1564, 1 preserve-caught-error at services/providerPool.ts:573. Beads AnyLLMTranslate-e140 was force-closed on 2026-09-29 WITHOUT a fix, so this remains open work under a closed record.",
-    "tscErrors": 0,
-    "tscErrorsDetail": "Clean — `pnpm compile` (tsc --noEmit) rerun 2026-10-05.",
-    "archivedTracks": 73,
-    "activeTracks": 0,
-    "activeTracksDetail": "None. Latest archive youtube-link-prealign_20260804 (2026-08-04). The seventh consecutive window shipped untracked via superpowers specs/plans + Beads.",
-    "failingTests": [],
-    "flakeFiles": [
-      {
-        "file": "services/__tests__/background.streamStats.test.ts",
-        "isolatedRuns": 6,
-        "isolatedFailures": 3,
-        "note": "Failing CASE moves between runs: 'dedupes identical source text ... bedw' and 'splits in-article and out-of-article pieces ... respects provider batch budgets' alternate. Beads n9ur describes this as a deterministic HEAD regression that reproduces in isolation; both halves of that premise are wrong."
-      },
-      {
-        "file": "content/__tests__/subtitleCoordinator.test.ts",
-        "isolatedRuns": 5,
-        "isolatedFailures": 1,
-        "note": "Fails even when run alone, contradicting the 2026-09-28 snapshot's 'both pass in isolation'."
-      }
-    ],
-    "installedTooling": {
-      "wxt": "0.20.22",
-      "vite": "8.0.8",
-      "vitest": "3.2.4",
-      "typescript": "5.9.3",
-      "eslint": "10.2.0",
-      "react": "19.2.4"
-    },
-    "dependencyDrift": "None since 2026-08-05 — package.json/pnpm-lock.yaml unchanged in this window (the only historical change was the `zip:source` script line). 8th consecutive refresh window with no dependency drift.",
-    "shippedSinceLastRefresh": [
-      "chore(agents): remove CLAUDE.md superseded by AGENTS.md (029853b)",
-      "chore(beads): sync the tracked export with the closed open issues (4b93059)",
-      "docs(readme): document full-track subtitle translation mode (e1cc954)",
-      "docs(readme): sync claims with the current codebase (1c99463)",
-      "conductor(refresh): delete the stale captionQualityPlus duplicate test file (this refresh)"
-    ],
-    "liveVerificationBacklog": [
-      "7 HBO Max items from docs/hbomax-subtitle-risk-audit.md §8 still need a real Max session (DRM/MSE capture, player DOM, CDN behaviour). Unit tests cannot close these.",
-      "Inline-translate framework write-back was verified live in Chromium against Quill, ProseMirror, Lexical, Slate and Draft.js (3/3 runs each); re-verify after any writeback.ts change since jsdom cannot reproduce engine selection semantics.",
-      "Auto-translate on page load (site rule + notification bar opt-out) is now documented in product.md; it is content-script behaviour that unit tests only partially cover — worth a live check on a fresh profile."
-    ]
+    "buildTotal": "3.92 MB",
+    "coverage": "not rerun; last 2026-09-28 80.26/77.40/83.08"
   },
   "beads": {
-    "open": [],
-    "inProgress": [],
-    "closedTotal": 535,
-    "closedInWindow": [
-      "AnyLLMTranslate-2wtc (P0 CWS listing — copy/screenshots/promo tile in the dashboard; only Submit remained)",
-      "AnyLLMTranslate-n9ur (P2 streamStats — closed unfixed; premise wrong, see flakeFiles)",
-      "AnyLLMTranslate-el3x (P2 mini-progress chip walked as page content)",
-      "AnyLLMTranslate-e140 (P2 ESLint gate — closed unfixed, 38 errors remain)",
-      "AnyLLMTranslate-isc (P2 mini-studio mode switch must cancel/re-activate)",
-      "AnyLLMTranslate-3sj (Subtitle Plus mode — shipped a8257a3..71b0357)",
-      "AnyLLMTranslate-9e85 (P2 third-party license attributions)",
-      "AnyLLMTranslate-2vm (P3 settle the Plus run in remaining track-identity guards)",
-      "AnyLLMTranslate-c27o (P3 trademark hygiene — manifest description + Netflix preset)"
-    ],
-    "closedWithoutFix": [
-      "AnyLLMTranslate-e140",
-      "AnyLLMTranslate-n9ur",
-      "AnyLLMTranslate-el3x",
-      "AnyLLMTranslate-isc",
-      "AnyLLMTranslate-9e85",
-      "AnyLLMTranslate-2vm",
-      "AnyLLMTranslate-c27o"
-    ],
-    "syncDirection": "skip",
-    "syncNote": "No active Conductor tracks or plan.md checkboxes exist, so no directional plan synchronization applies. `bd dolt pull` returned 'Pull complete' with no change (local DB already current); `bd stats` reports 0 open / 0 in progress / 535 closed and .beads/issues.jsonl matches the DB exactly (535 issue records, 6 memory records). The 9 remaining records were force-closed on 2026-09-29 at the user's request; the close reasons state that most were closed WITHOUT a fix, so the underlying work is still outstanding and each can be reopened with `bd reopen <id>`."
+    "open": 1,
+    "inProgress": 0,
+    "closed": 566,
+    "filedThisRefresh": [
+      "AnyLLMTranslate-slmv"
+    ]
   },
   "learningsConsolidation": {
-    "activeTrackLearnings": 0,
-    "archivedTrackLearnings": 71,
-    "changedTrackLearningsSincePreviousRefresh": 0,
-    "newPatternsElevated": [],
-    "duplicatesMerged": [],
-    "gotchasAdded": [
-      "A 'renamed' test file that was never deleted is a deterministic red wearing a flake's clothes (945a388 captionQualityPlus case)",
-      "A green isolated run does not clear a flake — both load-sensitive files fail when run alone, and n9ur's 'reproduces in isolation' premise is wrong"
-    ],
-    "note": "No new learnings.md since 2026-08-04; 71 archived learning files unchanged. The window added no source code, so the two Gotchas above were derived directly from the refresh's own measurements rather than from track learnings."
+    "archivedLearnings": 72,
+    "activeLearnings": 0,
+    "newPatterns": 1,
+    "alreadyElevatedByArchive": 4
   }
 }
