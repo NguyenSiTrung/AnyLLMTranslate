@@ -98,5 +98,5 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-## [~] Track: Page Translation Hardening — extraction, display safety, cost/reliability, memory/perf, lifecycle
+## [x] Track: Page Translation Hardening — extraction, display safety, cost/reliability, memory/perf, lifecycle
 *Link: [./conductor/tracks/page-translation-hardening_20261009/](./conductor/tracks/page-translation-hardening_20261009/)*
