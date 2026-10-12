@@ -44,14 +44,15 @@ export function buildPreviewProjection(input: PreviewProjectionInput): PreviewPr
   const prefixChar = input.languagePrefix?.slice(0, 1) || '/';
   const source = INLINE_PREVIEW_SOURCE;
 
-  if (input.enableLanguagePrefix) {
+  if (input.enableLanguagePrefix && input.languagePrefix !== 'none') {
     const translation = resolvePreviewTranslation('en');
-    const before = `${prefixChar}en ${source}`;
+    // Refer style: the starting key doubled (`//en`); one char also works.
+    const before = `${prefixChar}${prefixChar}en ${source}`;
     const after = input.dualMode ? `${source} / ${translation}` : translation;
     return {
       before,
       after,
-      meta: `Prefix ${prefixChar}en → English (demo)`,
+      meta: `Prefix ${prefixChar}${prefixChar}en → English (demo)`,
     };
   }
 

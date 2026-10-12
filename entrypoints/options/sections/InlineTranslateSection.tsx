@@ -28,7 +28,14 @@ import { Button } from '@/ui/Button';
 import { Textarea } from '@/ui/Textarea';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { LANGUAGES } from '@/lib/languages';
-import { DEFAULT_INLINE_TRANSLATE_BLOCKLIST } from '@/types/config';
+import {
+  DEFAULT_INLINE_TRANSLATE_BLOCKLIST,
+  INLINE_TRIGGER_KEYS,
+  INLINE_TRIGGER_TIMEOUT_MAX_MS,
+  INLINE_TRIGGER_TIMEOUT_MIN_MS,
+  type InlineTriggerKey,
+} from '@/types/config';
+import { formatGestureLabel } from '@/lib/shortcutDisplay';
 import { InlineTranslatePreview } from '@/entrypoints/options/components/InlineTranslatePreview';
 import { useDeferredCommit } from '@/entrypoints/options/hooks/useDeferredCommit';
 
@@ -45,6 +52,19 @@ const DUAL_MODE_OPTIONS: { value: string; label: string; icon: ReactNode }[] = [
   },
 ];
 
+const KEY_LABELS: Record<InlineTriggerKey, string> = {
+  ' ': 'Space',
+  '/': '/  slash',
+  '=': '=  equals',
+  ';': ';  semicolon',
+  ',': ',  comma',
+  '.': '.  period',
+  ':': ':  colon',
+};
+
+/** Starting-key select value that turns language prefixes off. */
+const STARTING_KEY_NONE = 'none';
+
 export function InlineTranslateSection() {
   const inlineTranslate = useSettingsStore((s) => s.inlineTranslate);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -55,10 +75,30 @@ export function InlineTranslateSection() {
     updateSettings({ inlineTranslate: { ...inlineTranslate, ...partial } });
   };
 
-  const gestureLabel =
-    inlineTranslate.triggerKey === ' '
-      ? `Space × ${inlineTranslate.tapCount}`
-      : `${inlineTranslate.triggerKey} × ${inlineTranslate.tapCount}`;
+  const gestureLabel = formatGestureLabel(inlineTranslate.tapCount, inlineTranslate.triggerKey);
+  const prefixEnabled = inlineTranslate.enableLanguagePrefix ?? true;
+  const startingKey = prefixEnabled ? (inlineTranslate.languagePrefix ?? '/') : STARTING_KEY_NONE;
+  const startingKeyOptions = [
+    { value: STARTING_KEY_NONE, label: 'None (no language prefix)' },
+    ...INLINE_TRIGGER_KEYS.filter((k) => k !== ' ' && k !== inlineTranslate.triggerKey).map((k) => ({
+      value: k,
+      label: KEY_LABELS[k],
+    })),
+  ];
+
+  const setTrailingKey = (triggerKey: InlineTriggerKey) => {
+    // A starting key equal to the trailing key would be ambiguous: turn prefixes off.
+    const clash = prefixEnabled && triggerKey === inlineTranslate.languagePrefix;
+    patch(clash ? { triggerKey, enableLanguagePrefix: false } : { triggerKey });
+  };
+
+  const setStartingKey = (value: string) => {
+    if (value === STARTING_KEY_NONE) {
+      patch({ enableLanguagePrefix: false });
+      return;
+    }
+    patch({ enableLanguagePrefix: true, languagePrefix: value });
+  };
 
   // Local draft so newlines / trailing spaces survive while typing. Parse +
   // persist only on blur (trim/filter on every keystroke ate separators and
@@ -75,15 +115,6 @@ export function InlineTranslateSection() {
       inlineTranslate: { ...current, blocklistPatterns: patterns },
     });
   });
-  const languagePrefixField = useDeferredCommit(
-    inlineTranslate.languagePrefix ?? '/',
-    (languagePrefix) => {
-      const current = useSettingsStore.getState().inlineTranslate;
-      void updateSettings({
-        inlineTranslate: { ...current, languagePrefix },
-      });
-    },
-  );
   const patternCount = blocklistField.value
     .split('\n')
     .map((s) => s.trim())
@@ -135,7 +166,7 @@ export function InlineTranslateSection() {
               disabled={!enabled}
               targetLanguage={inlineTranslate.targetLanguage}
               dualMode={inlineTranslate.dualMode ?? false}
-              enableLanguagePrefix={inlineTranslate.enableLanguagePrefix ?? true}
+              enableLanguagePrefix={prefixEnabled}
               languagePrefix={inlineTranslate.languagePrefix ?? '/'}
               tapCount={inlineTranslate.tapCount}
               triggerKeyLabel={gestureLabel}
@@ -171,9 +202,18 @@ export function InlineTranslateSection() {
                   </div>
                 </div>
 
+                <Toggle
+                  id="inline-translate-gesture-toggle"
+                  label="Key gesture"
+                  description="Translate by tapping the trailing key at the end of your text. Off = Alt+I only."
+                  checked={inlineTranslate.gestureEnabled ?? true}
+                  onChange={(gestureEnabled) => patch({ gestureEnabled })}
+                  disabled={!enabled}
+                />
+
                 <FieldGroup
                   label="Target Language"
-                  description="Default language for input translation (overridable with /en-style prefixes)."
+                  description="Default language for input translation."
                   hint="Type the first few letters to jump to a language."
                   htmlFor="inline-translate-target-language"
                 >
@@ -190,32 +230,47 @@ export function InlineTranslateSection() {
                 </FieldGroup>
 
                 <FieldGroup
-                  label="Tap Count"
-                  description={`Number of consecutive key presses to trigger (${inlineTranslate.tapCount})`}
+                  label="Trailing key"
+                  description="Tap this key at the end of the text to translate."
+                  htmlFor="inline-translate-trailing-key"
                 >
-                  <Slider
-                    id="inline-translate-tap-count"
-                    min={2}
-                    max={5}
-                    step={1}
-                    value={inlineTranslate.tapCount}
-                    onChange={(tapCount) => patch({ tapCount })}
+                  <Select
+                    id="inline-translate-trailing-key"
+                    value={inlineTranslate.triggerKey}
+                    onChange={(e) => setTrailingKey(e.target.value as InlineTriggerKey)}
+                    options={INLINE_TRIGGER_KEYS.map((k) => ({ value: k, label: KEY_LABELS[k] }))}
+                    disabled={!enabled || inlineTranslate.gestureEnabled === false}
+                  />
+                </FieldGroup>
+
+                <FieldGroup
+                  label="Starting key"
+                  description={`Start the text with it plus a language to override the target, e.g. ${
+                    prefixEnabled ? `${startingKey}${startingKey}en hello` : 'none set'
+                  }.`}
+                  htmlFor="inline-translate-starting-key"
+                >
+                  <Select
+                    id="inline-translate-starting-key"
+                    value={startingKey}
+                    onChange={(e) => setStartingKey(e.target.value)}
+                    options={startingKeyOptions}
                     disabled={!enabled}
                   />
                 </FieldGroup>
 
                 <FieldGroup
-                  label="Tap Gap"
-                  description={`Maximum pause between Space taps (${inlineTranslate.triggerGapMs}ms)`}
+                  label="Combo interval"
+                  description={`Maximum pause between taps of a non-space trailing key (${inlineTranslate.triggerTimeoutMs}ms)`}
                 >
                   <Slider
-                    id="inline-translate-tap-gap"
-                    min={100}
-                    max={1000}
+                    id="inline-translate-combo-interval"
+                    min={INLINE_TRIGGER_TIMEOUT_MIN_MS}
+                    max={INLINE_TRIGGER_TIMEOUT_MAX_MS}
                     step={50}
-                    value={inlineTranslate.triggerGapMs}
-                    onChange={(triggerGapMs) => patch({ triggerGapMs })}
-                    disabled={!enabled}
+                    value={inlineTranslate.triggerTimeoutMs}
+                    onChange={(triggerTimeoutMs) => patch({ triggerTimeoutMs })}
+                    disabled={!enabled || inlineTranslate.triggerKey === ' '}
                   />
                 </FieldGroup>
               </div>
@@ -248,48 +303,20 @@ export function InlineTranslateSection() {
                 </FieldGroup>
 
                 <Toggle
-                  id="inline-translate-prefix-toggle"
-                  label="Enable Language Prefix"
-                  description="Leading tokens like /en or /ja set the target language for that request"
-                  checked={inlineTranslate.enableLanguagePrefix ?? true}
-                  onChange={(enableLanguagePrefix) => patch({ enableLanguagePrefix })}
+                  id="inline-translate-auto-language"
+                  label="Reply in the conversation's language"
+                  description="On supported chat sites, translate into the language of the messages around the field."
+                  checked={inlineTranslate.autoLanguageEnable ?? true}
+                  onChange={(autoLanguageEnable) => patch({ autoLanguageEnable })}
                   disabled={!enabled}
                 />
 
-                <FieldGroup
-                  label="Prefix Character"
-                  description="Character that starts a language override (default /)."
-                  htmlFor="inline-translate-prefix-char"
-                >
-                  <input
-                    id="inline-translate-prefix-char"
-                    type="text"
-                    maxLength={1}
-                    value={languagePrefixField.value}
-                    onChange={(e) => languagePrefixField.setValue(e.target.value.slice(0, 1))}
-                    onBlur={() => {
-                      if (languagePrefixField.value) {
-                        languagePrefixField.commit();
-                        return;
-                      }
-                      languagePrefixField.adopt('/');
-                      const current = useSettingsStore.getState().inlineTranslate;
-                      void updateSettings({
-                        inlineTranslate: { ...current, languagePrefix: '/' },
-                      });
-                    }}
-                    disabled={!enabled || !(inlineTranslate.enableLanguagePrefix ?? true)}
-                    className="w-16 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-sm text-zinc-200 font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
-                    aria-label="Language prefix character"
-                  />
-                </FieldGroup>
-
                 <Toggle
-                  id="inline-translate-fallback-undo"
-                  label="Fallback Undo"
-                  description="Re-triggering the gesture/shortcut restores the original when native Ctrl+Z is unavailable"
-                  checked={inlineTranslate.enableFallbackUndo ?? true}
-                  onChange={(enableFallbackUndo) => patch({ enableFallbackUndo })}
+                  id="inline-translate-auto-page-language"
+                  label="Use the page language"
+                  description="When no conversation language is found, translate into the page's language."
+                  checked={inlineTranslate.autoLanguagePageEnable ?? false}
+                  onChange={(autoLanguagePageEnable) => patch({ autoLanguagePageEnable })}
                   disabled={!enabled}
                 />
               </div>
@@ -349,55 +376,135 @@ export function InlineTranslateSection() {
         <div className="animate-stagger" style={stagger(4)}>
           <Card
             title="Advanced"
-            description="Fine-tune gesture recognition. Defaults work for most users."
+            description="Fine-tune timing, prompts and undo. Defaults work for most users."
             icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
             variant="bordered"
           >
             <DisabledDimmer disabled={!enabled}>
-              <AdvancedDisclosure label="Gesture timing" idPrefix="inline-gesture-timing">
+              <AdvancedDisclosure label="Advanced options" idPrefix="inline-advanced">
                 <div className="space-y-5">
                   <FieldGroup
-                    label="Idle Debounce"
-                    description={`Wait after the last trigger tap before firing (${inlineTranslate.idleMs ?? 0}ms). 0 = fire immediately.`}
+                    label="Tap Count"
+                    description={`Consecutive trailing-key taps that trigger (${inlineTranslate.tapCount})`}
                   >
                     <Slider
-                      id="inline-translate-idle-ms"
-                      min={0}
-                      max={500}
-                      step={25}
-                      value={inlineTranslate.idleMs ?? 0}
-                      onChange={(idleMs) => patch({ idleMs })}
+                      id="inline-translate-tap-count"
+                      min={2}
+                      max={5}
+                      step={1}
+                      value={inlineTranslate.tapCount}
+                      onChange={(tapCount) => patch({ tapCount })}
                       disabled={!enabled}
                     />
                   </FieldGroup>
                   <FieldGroup
-                    label="Trigger Gap"
-                    description={`Minimum gap between counted taps (${inlineTranslate.triggerGapMs ?? 0}ms). 0 = no gap filter.`}
+                    label="Tap Gap"
+                    description={`Maximum pause between Space taps (${inlineTranslate.triggerGapMs}ms)`}
                   >
                     <Slider
-                      id="inline-translate-gap-ms"
-                      min={0}
-                      max={200}
-                      step={10}
-                      value={inlineTranslate.triggerGapMs ?? 0}
+                      id="inline-translate-tap-gap"
+                      min={100}
+                      max={1000}
+                      step={50}
+                      value={inlineTranslate.triggerGapMs}
                       onChange={(triggerGapMs) => patch({ triggerGapMs })}
                       disabled={!enabled}
                     />
                   </FieldGroup>
                   <FieldGroup
+                    label="Idle wait"
+                    description={`Quiet time after the last Space tap before translating (${inlineTranslate.idleMs}ms)`}
+                  >
+                    <Slider
+                      id="inline-translate-idle-ms"
+                      min={0}
+                      max={1000}
+                      step={50}
+                      value={inlineTranslate.idleMs}
+                      onChange={(idleMs) => patch({ idleMs })}
+                      disabled={!enabled}
+                    />
+                  </FieldGroup>
+                  <FieldGroup
                     label="Tolerance"
-                    description={`Extra noisy taps allowed before reset (${inlineTranslate.triggerToleranceCount ?? 0})`}
+                    description={`Extra Space taps above the tap count that still translate (${inlineTranslate.triggerToleranceCount})`}
                   >
                     <Slider
                       id="inline-translate-tolerance"
                       min={0}
                       max={3}
                       step={1}
-                      value={inlineTranslate.triggerToleranceCount ?? 0}
+                      value={inlineTranslate.triggerToleranceCount}
                       onChange={(triggerToleranceCount) => patch({ triggerToleranceCount })}
                       disabled={!enabled}
                     />
                   </FieldGroup>
+                  <FieldGroup
+                    label="Cancel window"
+                    description={`Typing within this time after the trigger cancels the translation (${inlineTranslate.cancelWindowMs}ms)`}
+                  >
+                    <Slider
+                      id="inline-translate-cancel-window"
+                      min={0}
+                      max={10000}
+                      step={500}
+                      value={inlineTranslate.cancelWindowMs}
+                      onChange={(cancelWindowMs) => patch({ cancelWindowMs })}
+                      disabled={!enabled}
+                    />
+                  </FieldGroup>
+                  <FieldGroup
+                    label="Minimum duration"
+                    description={`Keep the loading indicator at least this long before writing (${inlineTranslate.minDurationMs}ms)`}
+                  >
+                    <Slider
+                      id="inline-translate-min-duration"
+                      min={0}
+                      max={3000}
+                      step={100}
+                      value={inlineTranslate.minDurationMs}
+                      onChange={(minDurationMs) => patch({ minDurationMs })}
+                      disabled={!enabled}
+                    />
+                  </FieldGroup>
+                  <Toggle
+                    id="inline-translate-confirm-long"
+                    label="Confirm long text"
+                    description="Ask before translating a long draft"
+                    checked={inlineTranslate.confirmLongText ?? true}
+                    onChange={(confirmLongText) => patch({ confirmLongText })}
+                    disabled={!enabled}
+                  />
+                  <FieldGroup
+                    label="Long text threshold"
+                    description={`Characters above which to ask first (${inlineTranslate.confirmLongTextLength}; 0 = never ask)`}
+                  >
+                    <Slider
+                      id="inline-translate-long-text"
+                      min={0}
+                      max={2000}
+                      step={50}
+                      value={inlineTranslate.confirmLongTextLength}
+                      onChange={(confirmLongTextLength) => patch({ confirmLongTextLength })}
+                      disabled={!enabled || inlineTranslate.confirmLongText === false}
+                    />
+                  </FieldGroup>
+                  <Toggle
+                    id="inline-translate-language-bar"
+                    label="Target-language bar"
+                    description="After translating, show a bar to switch the language or undo"
+                    checked={inlineTranslate.enableTargetLanguageBar ?? true}
+                    onChange={(enableTargetLanguageBar) => patch({ enableTargetLanguageBar })}
+                    disabled={!enabled}
+                  />
+                  <Toggle
+                    id="inline-translate-fallback-undo"
+                    label="Fallback Undo"
+                    description="Re-triggering the gesture/shortcut restores the original when native Ctrl+Z is unavailable"
+                    checked={inlineTranslate.enableFallbackUndo ?? true}
+                    onChange={(enableFallbackUndo) => patch({ enableFallbackUndo })}
+                    disabled={!enabled}
+                  />
                 </div>
               </AdvancedDisclosure>
             </DisabledDimmer>
@@ -419,16 +526,20 @@ export function InlineTranslateSection() {
                 </kbd>{' '}
                 (customize under chrome://extensions/shortcuts).
               </li>
+              {prefixEnabled && (
+                <li>
+                  Prefix example:{' '}
+                  <code className="text-zinc-400">{`${startingKey}${startingKey}en hello`}</code> +
+                  gesture → English, strips the prefix token.
+                </li>
+              )}
               <li>
-                Prefix example:{' '}
-                <code className="text-zinc-400">
-                  {(inlineTranslate.languagePrefix ?? '/') + 'en hello'}
-                </code>{' '}
-                + gesture → English, strips the prefix token.
+                After translating, the bar under the field switches the language (re-translating
+                your original text) or undoes the change.
               </li>
               <li>Works in text inputs, search boxes, textareas, and contentEditable fields.</li>
               <li>
-                Undo with Ctrl+Z when available; otherwise re-trigger if Fallback Undo is on.
+                Undo with Ctrl+Z or the bar&apos;s Undo; otherwise re-trigger if Fallback Undo is on.
               </li>
               <li>
                 Password fields, code editors, blocklisted hosts, browser internal pages, and the

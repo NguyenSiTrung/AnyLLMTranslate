@@ -88,9 +88,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 <!-- execution: parallel -->
 <!-- depends: phase2 -->
 
-- [ ] Task 1: Inline Translate section — refer surface + Advanced disclosure (FR-15)
+- [x] Task 1: Inline Translate section — refer surface + Advanced disclosure (FR-15)
   <!-- files: entrypoints/options/sections/InlineTranslateSection.tsx, entrypoints/options/components/InlineTranslatePreview.tsx, lib/inlineTranslatePreview.ts, entrypoints/options/sections/__tests__/inlineTranslateSection.test.tsx -->
-  - [ ] Test: trailing/starting key selects (starting excludes trailing, `none`), combo interval 150–1000, gesture toggle, auto-language toggles, Advanced knobs write settings
+  - [x] Test: trailing/starting key selects (starting excludes trailing, `none`), combo interval 150–1000, gesture toggle, auto-language toggles, Advanced knobs write settings
 - [ ] Task 2: Site Rules "Inline translate" disclosure (FR-8)
   <!-- files: entrypoints/options/sections/SiteRulesSection.tsx, entrypoints/options/sections/__tests__/siteRulesSection.test.tsx -->
   - [ ] Test: selectors textarea + numeric overrides persist on the rule; empty fields remove the override key

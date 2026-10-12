@@ -114,7 +114,7 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       enableLanguagePrefix: true,
       languagePrefix: '/',
     });
-    expect(prefix.before).toBe(`/en ${INLINE_PREVIEW_SOURCE}`);
+    expect(prefix.before).toBe(`//en ${INLINE_PREVIEW_SOURCE}`);
     expect(prefix.after).toBe(resolvePreviewTranslation('en'));
 
     const prefixDual = buildPreviewProjection({
@@ -123,7 +123,7 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       enableLanguagePrefix: true,
       languagePrefix: '#',
     });
-    expect(prefixDual.before).toBe(`#en ${INLINE_PREVIEW_SOURCE}`);
+    expect(prefixDual.before).toBe(`##en ${INLINE_PREVIEW_SOURCE}`);
     expect(prefixDual.after).toBe(`${INLINE_PREVIEW_SOURCE} / ${resolvePreviewTranslation('en')}`);
 
     const emptyPrefix = buildPreviewProjection({
@@ -132,7 +132,7 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       enableLanguagePrefix: true,
       languagePrefix: '',
     });
-    expect(emptyPrefix.before.startsWith('/en ')).toBe(true);
+    expect(emptyPrefix.before.startsWith('//en ')).toBe(true);
   });
 });
 

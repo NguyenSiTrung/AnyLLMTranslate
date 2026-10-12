@@ -370,7 +370,7 @@ describe('InlineTranslateSection', () => {
     const n = DEFAULT_INLINE_TRANSLATE_SETTINGS.blocklistPatterns.length;
     expect(screen.getByText(new RegExp(`${n}\\s+patterns?`, 'i'))).toBeInTheDocument();
 
-    const btn = screen.getByRole('button', { name: /Gesture timing/i });
+    const btn = screen.getByRole('button', { name: /Advanced options/i });
     expect(btn).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(screen.getByRole('radio', { name: /Original \+ translation/i }));
@@ -392,7 +392,7 @@ describe('InlineTranslateSection', () => {
     expect(screen.getByText(/Enable inline translation to preview/i)).toBeInTheDocument();
     cleanup();
 
-    // facet: keeps blocklist and language-prefix drafts local until blur
+    // facet: keeps the blocklist draft local until blur
     // blocklist: keeps draft while typing (newlines/spaces) and commits on blur
     useSettingsStore.setState({
       inlineTranslate: {
@@ -422,24 +422,6 @@ describe('InlineTranslateSection', () => {
       ]);
     });
     blocklistRender.unmount();
-
-    // language prefix: keeps the edit local until blur
-    const updateSettings = vi.fn();
-    useSettingsStore.setState({ updateSettings });
-    render(<InlineTranslateSection />);
-    const input = screen.getByLabelText('Language prefix character') as HTMLInputElement;
-
-    input.focus();
-    fireEvent.change(input, { target: { value: '#' } });
-
-    expect(input).toHaveFocus();
-    expect(input.value).toBe('#');
-    expect(updateSettings).not.toHaveBeenCalled();
-
-    fireEvent.blur(input);
-    expect(updateSettings).toHaveBeenCalledWith({
-      inlineTranslate: expect.objectContaining({ languagePrefix: '#' }),
-    });
   });
 });
 

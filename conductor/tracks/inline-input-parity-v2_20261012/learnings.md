@@ -179,3 +179,10 @@ From `conductor/patterns.md` (inline-translate sections):
 ## [2026-10-12] - Phase 4 Verification
 - **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 914/915 (130/131 files); only red = streamStats `splits in-article and out-of-article pieces…` (known moving flake `AnyLLMTranslate-slmv`). Integration test 3/3 stable in repeat runs.
 ---
+
+## [2026-10-12] - Phase 5 Task 1: Inline Translate section — refer surface
+- **Implemented:** Trigger card: Key gesture toggle (`gestureEnabled`), target language, Trailing key select (`INLINE_TRIGGER_KEYS`), Starting key select (`none` + keys minus space and the trailing key; `none` ↔ `enableLanguagePrefix: false`), Combo interval slider 150–1000 (disabled for Space). Choosing a trailing key equal to the starting key turns prefixes off. Write & language: write mode + "Reply in the conversation's language" / "Use the page language". "Advanced options" disclosure: tap count, tap gap, idle, tolerance, cancel window, min duration, confirm long text + threshold, target-language bar, fallback undo. The free-text prefix-char input is gone. Preview shows the doubled starting key (`//en`) and `formatGestureLabel`.
+- **Files changed:** entrypoints/options/sections/InlineTranslateSection.tsx, lib/inlineTranslatePreview.ts, entrypoints/options/sections/__tests__/inlineTranslateSection.test.tsx, sections.test.tsx, lib/__tests__/settings.test.ts
+- **Learnings:**
+  - Gotchas: `sections.test.tsx › SubtitlesSection` can hit its 5 s timeout under a parallel run of `entrypoints/options`; isolated 2/2 green.
+---
