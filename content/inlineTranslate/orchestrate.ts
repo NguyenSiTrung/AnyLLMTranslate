@@ -35,6 +35,7 @@ import {
   writeElementTextAsync,
 } from './writeback';
 import type { WriteBackResult } from './writeback';
+import { passesTailGate, protectUrls, removeTail } from './tail';
 import type { InlineTranslateRuntimeConfig } from './types';
 
 /** A stalled request must not leave the field stuck in "Translating…". */
@@ -165,16 +166,6 @@ export function cancelActiveRequest(reason = 'cancelled'): void {
   activeElement = null;
 }
 
-function stripTrailingTrigger(text: string, key: string, count: number): string {
-  let result = text;
-  for (let i = 0; i < count; i++) {
-    if (result.endsWith(key)) {
-      result = result.slice(0, -key.length);
-    }
-  }
-  return result;
-}
-
 /**
  * Attempt fallback undo: restore the original draft if present.
  *
@@ -274,18 +265,21 @@ export async function runInlineTranslate(
 
   let rawText = getElementText(targetEl);
   if (!options.skipStripTrailing) {
-    rawText = stripTrailingTrigger(rawText, config.triggerKey, config.tapCount);
+    const tailMatched = passesTailGate(rawText, config.triggerKey, config.tapCount);
+    rawText = removeTail(rawText, config.triggerKey, config.tapCount, { tailMatched }).text;
   }
 
   // Snapshot identity before any mutation
   const snapshotEl = targetEl;
 
   // Language prefix
-  const prefixResult = parseLanguagePrefix(rawText.trimStart(), {
+  // URLs are masked so `//xx`-style prefix parsing never matches inside one.
+  const urlSafe = protectUrls(rawText.trimStart());
+  const prefixResult = parseLanguagePrefix(urlSafe.text, {
     enabled: config.enableLanguagePrefix,
     prefixChar: config.languagePrefix,
   });
-  const text = prefixResult.body.trim();
+  const text = urlSafe.restore(prefixResult.body).trim();
   const targetLanguageOverride = prefixResult.targetLang;
 
   if (!text) {

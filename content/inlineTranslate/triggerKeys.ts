@@ -7,7 +7,7 @@
  */
 
 const KEY_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  ' ': [' ', ' ', '　'],
+  ' ': [' ', '\u00a0', '\u3000'],
   '/': ['/', '、'],
   '.': ['.', '。'],
   ',': [',', '，'],

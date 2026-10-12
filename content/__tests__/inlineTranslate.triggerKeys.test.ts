@@ -14,10 +14,10 @@ function keydown(key: string, code = ''): KeyboardEvent {
 
 describe('trigger key aliases', () => {
   it('treats space, NBSP and the ideographic space as the same trigger', () => {
-    expect(triggerCharClass(' ')).toEqual([' ', ' ', '　']);
+    expect(triggerCharClass(' ')).toEqual([' ', '\u00a0', '\u3000']);
     expect(matchesTriggerChar(' ', ' ')).toBe(true);
-    expect(matchesTriggerChar(' ', ' ')).toBe(true);
-    expect(matchesTriggerChar('　', ' ')).toBe(true);
+    expect(matchesTriggerChar('\u00a0', ' ')).toBe(true);
+    expect(matchesTriggerChar('\u3000', ' ')).toBe(true);
     expect(matchesTriggerChar('\t', ' ')).toBe(false);
     expect(isSpaceTriggerKey(' ')).toBe(true);
     expect(isSpaceTriggerKey('Space')).toBe(true);
@@ -50,7 +50,7 @@ describe('trigger key aliases', () => {
     expect(isTriggerKeyEvent(keydown(' ', 'Space'), ' ')).toBe(true);
     // IME / OS layouts that report a non-space key but keep code === 'Space'.
     expect(isTriggerKeyEvent(keydown('Process', 'Space'), ' ')).toBe(true);
-    expect(isTriggerKeyEvent(keydown('　'), ' ')).toBe(true);
+    expect(isTriggerKeyEvent(keydown('\u3000'), ' ')).toBe(true);
     expect(isTriggerKeyEvent(keydown('a', 'KeyA'), ' ')).toBe(false);
     expect(isTriggerKeyEvent(keydown('/', 'Slash'), '/')).toBe(true);
     expect(isTriggerKeyEvent(keydown('、'), '/')).toBe(true);

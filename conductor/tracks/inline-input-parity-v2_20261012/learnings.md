@@ -83,3 +83,11 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Context: unknown keys (`Enter` in legacy tests) map to a one-element class, so the runtime still accepts arbitrary keys on the non-space branch.
 ---
+
+## [2026-10-12] - Phase 2 Task 2: Tail gate + removeTail
+- **Implemented:** `tail.ts` — `passesTailGate` (last non-empty line ends with ≥ min(tapCount,2) consecutive trigger/alias chars), `removeTail` (whole run when matched, else capped at tapCount; drops a preceding `.`/`。` when < 3 removed), `protectUrls` (private-use placeholders, restore). `orchestrate.ts` uses them; `stripTrailingTrigger` deleted.
+- **Files changed:** content/inlineTranslate/tail.ts, content/inlineTranslate/orchestrate.ts, content/inlineTranslate/triggerKeys.ts (escape fix), content/__tests__/inlineTranslate.tail.test.ts
+- **Learnings:**
+  - Gotchas: writing ` ` / `　` through a shell heredoc can land as the literal characters; ESLint `no-irregular-whitespace` then flags regex literals (strings are skipped, so it hides in string tables). Grep for the raw bytes or write escapes from Python.
+  - Patterns: the period rule is skipped when `.` is itself the trigger key, otherwise `.`-key bursts would eat a real sentence end.
+---
