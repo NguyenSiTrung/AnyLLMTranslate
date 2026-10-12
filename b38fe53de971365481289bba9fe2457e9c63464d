@@ -1,0 +1,1 @@
+P2T3: two-branch FSM + timeWindowMs removal (FR-1). Tests: parity 'two-branch gesture FSM (refer truth table)'
