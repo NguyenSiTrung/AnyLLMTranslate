@@ -147,3 +147,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: `vi.useFakeTimers({ shouldAdvanceTime: true })` lets real time leak into `Date.now()`; ms-boundary tests (2999 vs 3001) re-init plain `vi.useFakeTimers()`. Gesture-driven tests run on the module config, so chatHardening's top-level beforeEach sets `updateInlineTranslateConfig({ minDurationMs: 0 })`.
 ---
+
+## [2026-10-12] - Phase 4 Task 3: Loading overlay
+- **Implemented:** `showLoadingOverlay(field)` / `hideLoadingOverlay()` / `getLoadingOverlay()`: fixed, max z-index, `data-anyllm-owned` host with an open shadow root (three amber rolling dots, reduced-motion aware), pinned inside the field's right edge. Repositions on capture-phase scroll, resize and ResizeObserver; self-hides when the field disconnects; mounts inside an open `<dialog>` (top layer) when the field is in one.
+- **Files changed:** content/inlineTranslate/overlay.ts, content/__tests__/inlineTranslate.overlay.test.ts
+- **Learnings:**
+  - Gotchas: jsdom has no layout, so tests stub `getBoundingClientRect` on the field and assert inline styles.
+---

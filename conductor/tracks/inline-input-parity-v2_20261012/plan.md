@@ -69,9 +69,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
   <!-- files: content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.chatHardening.test.ts -->
   <!-- depends: task1 -->
   - [x] Test: input at 2999 ms cancels, 3001 ms ignored; own write-back excluded; write held until 1500 ms; trigger while busy dropped
-- [ ] Task 3: Loading overlay (FR-10)
+- [x] Task 3: Loading overlay (FR-10)
   <!-- files: content/inlineTranslate/overlay.ts, content/__tests__/inlineTranslate.overlay.test.ts -->
-  - [ ] Test: shadow-root host mounted next to field, follows field rect, removed on write/cancel/error
+  - [x] Test: shadow-root host mounted next to field, follows field rect, removed on write/cancel/error
 - [ ] Task 4: Target-language bar + Undo + retarget (FR-11)
   <!-- files: content/inlineTranslate/languageBar.ts, content/__tests__/inlineTranslate.languageBar.test.ts -->
   - [ ] Test: chip/menu search, source badge, retarget callback receives original draft from `undoMap`, persists `targetLanguage`, Undo restores original, auto-hide ~5 s, reopen on focus while unchanged
