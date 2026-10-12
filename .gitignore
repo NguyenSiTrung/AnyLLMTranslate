@@ -44,7 +44,6 @@ __pycache__
 .beads-credential-key
 
 # Reference / vendored extension code (not part of this repo)
-ImmersiveTransalteExtensionCode/
 
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
