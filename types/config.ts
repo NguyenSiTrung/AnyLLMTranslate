@@ -588,12 +588,29 @@ export interface PageContext {
   schemaTypes?: string[];
 }
 
+/**
+ * Trailing trigger keys offered for the inline gesture (refer parity). Space is
+ * stored as `' '`; full-width IME forms are matched as aliases at runtime.
+ */
+export type InlineTriggerKey = ' ' | '/' | '=' | ';' | ',' | '.' | ':';
+
+export const INLINE_TRIGGER_KEYS: readonly InlineTriggerKey[] = [' ', '/', '=', ';', ',', '.', ':'];
+
+/** Combo-interval bounds for non-space trailing keys (ms). */
+export const INLINE_TRIGGER_TIMEOUT_MIN_MS = 150;
+export const INLINE_TRIGGER_TIMEOUT_MAX_MS = 1000;
+
 /** Inline translate settings for key-gesture translation */
 export interface InlineTranslateSettings {
   /** Whether inline translate is enabled */
   enabled: boolean;
-  /** Trigger key for the gesture (default: Space) */
-  triggerKey: string;
+  /**
+   * When false, the tap gesture is off and only the `translate-input-box`
+   * command / {@link translateFocusedInput} path translates (shortcut-only).
+   */
+  gestureEnabled: boolean;
+  /** Trailing trigger key for the gesture (default: Space) */
+  triggerKey: InlineTriggerKey;
   /** Number of consecutive key presses required (2–5, default: 3) */
   tapCount: number;
   /** Time window in ms for consecutive presses (200–2000, default: 1500) */
@@ -601,25 +618,45 @@ export interface InlineTranslateSettings {
   /** Target language for inline translation (ISO 639-1 code) */
   targetLanguage: string;
   /**
-   * Idle debounce after the last trigger tap before fire (ms).
-   * 0 = fire immediately once tapCount is reached (subject to microtask).
-   * Immersive-style: wait briefly after the space burst settles.
+   * Space branch: idle time after the last tap before the burst is evaluated
+   * (ms). Every counted tap re-arms the timer.
    */
   idleMs: number;
   /**
-   * Minimum gap between consecutive trigger taps (ms). Taps closer than this
-   * still count but gap tolerance can be applied via triggerToleranceCount.
+   * Space branch: maximum gap between consecutive taps (ms). A tap arriving
+   * later than this starts a new burst (count = 1).
    */
   triggerGapMs: number;
   /**
-   * How many out-of-window / noisy taps may be tolerated before resetting the
-   * gesture counter (0 = strict window filtering only).
+   * Space branch: extra taps tolerated above `tapCount` (fires on
+   * `tapCount … tapCount + tolerance`; more taps never fire).
    */
   triggerToleranceCount: number;
   /** When true, leading `/en`-style prefixes override target language for one request */
   enableLanguagePrefix: boolean;
   /** Prefix character for language override (default `/`) */
   languagePrefix: string;
+  /**
+   * Non-space trailing keys: taps further apart than this reset the count
+   * (combo interval, 150–1000 ms; stored values < 100 fall back to default).
+   */
+  triggerTimeoutMs: number;
+  /** User input in the field within this window after a trigger cancels it (ms). */
+  cancelWindowMs: number;
+  /** The result is not written before this much time has passed since trigger (ms). */
+  minDurationMs: number;
+  /** Ask before translating text longer than {@link confirmLongTextLength}. */
+  confirmLongText: boolean;
+  /** Long-text confirm threshold in characters (0 = off). */
+  confirmLongTextLength: number;
+  /** Show the target-language bar (language chip + Undo) after a write. */
+  enableTargetLanguageBar: boolean;
+  /** Detect the target language from the conversation (per-site selectors). */
+  autoLanguageEnable: boolean;
+  /** Fall back to the page language when no selector matched (opt-in). */
+  autoLanguagePageEnable: boolean;
+  /** One-time first-use guide has been shown. */
+  inlineGuideShown: boolean;
   /**
    * When true, write original + translation joined; when false (default),
    * replace field with translation only.
@@ -738,6 +775,13 @@ export interface ExtensionSettings {
    * already comfortable).
    */
   inlineGestureWindowMigrated?: boolean;
+  /**
+   * One-time migration flag for inline parity v2: stored inline gesture values
+   * still on the old defaults (idle 0 / gap 0 / tolerance 0) take the refer
+   * defaults, `triggerKey` is constrained to {@link INLINE_TRIGGER_KEYS}, and
+   * `triggerTimeoutMs` is normalized. New installs start as true.
+   */
+  inlineParityV2Migrated?: boolean;
   /**
    * Multi-provider pool: multiple active providers, each with one or more API
    * keys, rotated round-robin with circuit-breaker failover. Empty for legacy
@@ -867,14 +911,26 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
    */
   timeWindowMs: 1500,
   targetLanguage: 'en',
-  idleMs: 0,
-  triggerGapMs: 0,
-  triggerToleranceCount: 0,
+  /** Refer parity: Space taps ≤ 250 ms apart, fire 250 ms after the last tap. */
+  idleMs: 250,
+  triggerGapMs: 250,
+  /** Space×3 fires on 3–5 taps; 6+ fast taps never fire. */
+  triggerToleranceCount: 2,
   enableLanguagePrefix: true,
   languagePrefix: '/',
   dualMode: false,
   blocklistPatterns: [...DEFAULT_INLINE_TRANSLATE_BLOCKLIST],
   enableFallbackUndo: true,
+  gestureEnabled: true,
+  triggerTimeoutMs: 200,
+  cancelWindowMs: 3000,
+  minDurationMs: 1500,
+  confirmLongText: true,
+  confirmLongTextLength: 200,
+  enableTargetLanguageBar: true,
+  autoLanguageEnable: true,
+  autoLanguagePageEnable: false,
+  inlineGuideShown: false,
 };
 
 /** Default PDF translator settings — auto-open is OFF by default. */
@@ -1011,6 +1067,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
    * Fresh installs set true in loadSettings when no stored settings exist.
    */
   inlineGestureWindowMigrated: false,
+  /** False so existing installs run the one-time inline parity v2 upgrade. */
+  inlineParityV2Migrated: false,
   /**
    * A brand-new install ships with exactly one default pool provider (mirroring
    * the legacy single-provider behavior) so the coordinator always has at least

@@ -37,3 +37,11 @@ From `conductor/patterns.md` (inline-translate sections):
 ---
 
 <!-- Learnings from implementation will be appended below -->
+
+## [2026-10-12] - Phase 1 Task 1: Extend InlineTranslateSettings + defaults
+- **Implemented:** `InlineTriggerKey` union + `INLINE_TRIGGER_KEYS`, combo-interval bounds, 9 new fields + `inlineGuideShown` (inside `inlineTranslate` so content can persist it with a nested patch), top-level `inlineParityV2Migrated` (false default → existing installs migrate). Refer defaults gap/idle 250, tolerance 2.
+- **Files changed:** types/config.ts, types/__tests__/config.test.ts, lib/__tests__/settings.test.ts
+- **Learnings:**
+  - Gotchas: `lib/__tests__/settings.test.ts` pins `DEFAULT_INLINE_TRANSLATE_SETTINGS` too — change both when defaults move.
+  - Context: the plan names `lib/__tests__/config.test.ts`, which does not exist; inline migration tests live in `lib/__tests__/settings.test.ts` ("inline gesture window migration").
+---

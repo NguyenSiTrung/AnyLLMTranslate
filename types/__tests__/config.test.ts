@@ -15,6 +15,8 @@ import {
   DEFAULT_KEY_INTERVAL_MS,
   defaultPoolKeyThrottle,
   PROVIDER_PRESETS,
+  DEFAULT_INLINE_TRANSLATE_SETTINGS,
+  INLINE_TRIGGER_KEYS,
 } from '@/types/config';
 
 describe('config defaults', () => {
@@ -89,5 +91,30 @@ describe('config defaults', () => {
     expect(defaultKey?.maxRpm).toBe(DEFAULT_KEY_MAX_RPM);
     expect(defaultKey?.concurrencyLimit).toBe(DEFAULT_KEY_CONCURRENCY_LIMIT);
     expect(defaultKey?.interval).toBe(DEFAULT_KEY_INTERVAL_MS);
+  });
+
+  it('ships refer-parity inline translate defaults (gesture FSM, pacing, auto language)', () => {
+    expect(DEFAULT_INLINE_TRANSLATE_SETTINGS).toMatchObject({
+      enabled: true,
+      gestureEnabled: true,
+      triggerKey: ' ',
+      tapCount: 3,
+      triggerGapMs: 250,
+      idleMs: 250,
+      triggerToleranceCount: 2,
+      triggerTimeoutMs: 200,
+      cancelWindowMs: 3000,
+      minDurationMs: 1500,
+      confirmLongText: true,
+      confirmLongTextLength: 200,
+      enableTargetLanguageBar: true,
+      autoLanguageEnable: true,
+      autoLanguagePageEnable: false,
+      inlineGuideShown: false,
+    });
+    expect(INLINE_TRIGGER_KEYS).toEqual([' ', '/', '=', ';', ',', '.', ':']);
+    expect(DEFAULT_SETTINGS.inlineTranslate).toEqual(DEFAULT_INLINE_TRANSLATE_SETTINGS);
+    // Existing installs merge this false default and run the v2 upgrade once.
+    expect(DEFAULT_SETTINGS.inlineParityV2Migrated).toBe(false);
   });
 });

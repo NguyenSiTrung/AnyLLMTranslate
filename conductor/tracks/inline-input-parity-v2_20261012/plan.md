@@ -9,10 +9,10 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 ## Phase 1: Settings model, migration, per-site resolution
 <!-- execution: sequential -->
 
-- [ ] Task 1: Extend `InlineTranslateSettings` + defaults (FR-14)
+- [x] Task 1: Extend `InlineTranslateSettings` + defaults (FR-14)
   <!-- files: types/config.ts, types/__tests__/config.test.ts -->
-  - [ ] Test: defaults equal refer values (gap 250, idle 250, tolerance 2, timeout 200, cancel 3000, min 1500, long-text 200, bar on, autoLanguage on/page off, gestureEnabled on, confirmLongText on)
-  - [ ] Add `InlineTriggerKey` union (`' ' | '/' | '=' | ';' | ',' | '.' | ':'`), new fields, `inlineParityV2Migrated`, `inlineGuideShown`
+  - [x] Test: defaults equal refer values (gap 250, idle 250, tolerance 2, timeout 200, cancel 3000, min 1500, long-text 200, bar on, autoLanguage on/page off, gestureEnabled on, confirmLongText on)
+  - [x] Add `InlineTriggerKey` union (`' ' | '/' | '=' | ';' | ',' | '.' | ':'`), new fields, `inlineParityV2Migrated`, `inlineGuideShown`
 - [ ] Task 2: One-shot migration `migrateInlineParityV2` (FR-14)
   <!-- files: lib/config.ts, lib/__tests__/config.test.ts -->
   - [ ] Test: old fingerprints (idle 0 / gap 0 / tolerance 0) → new defaults; customized values kept; flag blocks re-run; `triggerTimeoutMs` < 100 → default, clamp 150–1000; persist on false→true like `migrateInlineGestureWindowDefaults`
