@@ -100,3 +100,10 @@ From `conductor/patterns.md` (inline-translate sections):
   - Gotchas: Shift (for `:`) is a non-trigger keydown; without a modifier skip-list it resets every burst on shifted trigger keys.
   - Patterns: pipeline-focused suites pin `idleMs: 0`; suites asserting real defaults advance the fake clock past the 250 ms idle window instead.
 ---
+
+## [2026-10-12] - Phase 2 Task 4: Gesture-off (shortcut-only) mode
+- **Implemented:** gesture `enabled = enabled && gestureEnabled`; `translateFocusedInput` gated only by `enabled`.
+- **Files changed:** content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts
+- **Learnings:**
+  - Patterns: `setInlineTranslateEnabled` must derive the gesture flag through `gestureConfigFrom`, or re-enabling the feature silently re-arms taps in shortcut-only mode.
+---

@@ -17,6 +17,7 @@ import {
   PULSING_CLASS,
   TOAST_CLASS,
   removeToast,
+  translateFocusedInput,
 } from '@/content/inlineTranslate';
 
 /* ── Mocks ────────────────────────────────────────────────────── */
@@ -784,6 +785,60 @@ describe('active-element re-acquisition', () => {
     expect(toast).not.toBeNull();
     expect(toast?.getAttribute('data-type')).toBe('error');
     expect(toast?.textContent).toBe('⚠ Type something first');
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+});
+
+/* ── Gesture-off (shortcut-only) mode ─────────────────────────── */
+
+describe('gesture-off mode', () => {
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    cleanup = initInlineTranslate();
+  });
+
+  afterEach(() => {
+    cleanup();
+    updateInlineTranslateConfig({ gestureEnabled: true });
+    setInlineTranslateEnabled(true);
+  });
+
+  function focusedInput(value: string): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value;
+    document.body.appendChild(input);
+    input.focus();
+    return input;
+  }
+
+  function tapSpace(target: Element, times: number): void {
+    for (let i = 0; i < times; i++) {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+    }
+  }
+
+  it('ignores taps but still translates through the shortcut path; disabled blocks both', async () => {
+    updateInlineTranslateConfig({ gestureEnabled: false });
+    const input = focusedInput('xin chào   ');
+    mockSendMessage.mockResolvedValue({ success: true, translatedText: 'hello' });
+
+    tapSpace(input, 3);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mockSendMessage).not.toHaveBeenCalled();
+
+    await translateFocusedInput();
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'translateSelection', text: 'xin chào' }),
+    );
+
+    mockSendMessage.mockClear();
+    setInlineTranslateEnabled(false);
+    const other = focusedInput('bonjour   ');
+    tapSpace(other, 3);
+    await vi.advanceTimersByTimeAsync(300);
+    await translateFocusedInput();
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 });

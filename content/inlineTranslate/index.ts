@@ -128,7 +128,8 @@ function onTrigger(target: HTMLElement): void {
 
 function gestureConfigFrom(runtime: InlineTranslateRuntimeConfig): GestureConfig {
   return {
-    enabled: runtime.enabled,
+    // Shortcut-only mode: the feature stays on for Alt+I, the taps do nothing.
+    enabled: runtime.enabled && runtime.gestureEnabled !== false,
     triggerKey: runtime.triggerKey,
     tapCount: runtime.tapCount,
     idleMs: runtime.idleMs,
@@ -246,7 +247,7 @@ export function updateInlineTranslateConfig(
 export function setInlineTranslateEnabled(enabled: boolean): void {
   baseConfig.enabled = enabled;
   config.enabled = enabled;
-  gesture?.setConfig({ enabled });
+  gesture?.setConfig({ enabled: gestureConfigFrom(config).enabled });
   if (!enabled) {
     gesture?.reset();
     cancelActiveRequest('disabled');

@@ -41,9 +41,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
   <!-- files: content/inlineTranslate/gesture.ts, content/inlineTranslate/index.ts, types/config.ts, lib/config.ts, entrypoints/options/sections/ShortcutsSection.tsx, entrypoints/options/sections/InlineTranslateSection.tsx, entrypoints/options/components/InlineTranslatePreview.tsx, lib/inlineTranslatePreview.ts, content/__tests__/inlineTranslate.parity.test.ts -->
   - [x] Test truth table (fake timers, injected `now`): Space gaps 200×3 fire, 400×3 none, 4–5 taps fire, 6 none, tail-gate failure resets, non-space `/`×3 within 200 ms fires immediately, gap > timeout resets, compositionstart/delete input reset; keydown+insertText dedupe preserved
   - [x] Drop `timeWindowMs` from type, defaults, migration (delete it from stored settings), UI and preview; retire `inlineGestureWindowMigrated` logic if fully superseded
-- [ ] Task 4: Gesture-off (shortcut-only) mode (FR-3)
+- [x] Task 4: Gesture-off (shortcut-only) mode (FR-3)
   <!-- files: content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts -->
-  - [ ] Test: `gestureEnabled: false` → taps never fire; `translateFocusedInput()` still translates; `enabled: false` blocks both
+  - [x] Test: `gestureEnabled: false` → taps never fire; `translateFocusedInput()` still translates; `enabled: false` blocks both
 - [ ] Task: Conductor - Phase Verification 'Phase 2' (automated gates only)
 
 ## Phase 3: Language resolution (pure modules)
