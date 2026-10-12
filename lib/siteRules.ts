@@ -297,6 +297,9 @@ export type ResolvedInlineSiteConfig = InlineTranslateSettings & {
   autoLanguageSelectors: string[];
 };
 
+/** Anything shaped like the inline settings (the content runtime widens `triggerKey`). */
+type InlineSiteBase = Omit<InlineTranslateSettings, 'triggerKey'> & { triggerKey: string };
+
 const INLINE_NUMERIC_OVERRIDE_KEYS = [
   'triggerGapMs',
   'idleMs',
@@ -306,7 +309,10 @@ const INLINE_NUMERIC_OVERRIDE_KEYS = [
   'confirmLongTextLength',
 ] as const;
 
-function applyInlineOverride(target: ResolvedInlineSiteConfig, override: InlineSiteOverride): void {
+function applyInlineOverride(
+  target: InlineSiteBase & { autoLanguageSelectors: string[] },
+  override: InlineSiteOverride,
+): void {
   for (const key of INLINE_NUMERIC_OVERRIDE_KEYS) {
     const value = override[key];
     if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
@@ -327,12 +333,12 @@ function applyInlineOverride(target: ResolvedInlineSiteConfig, override: InlineS
  * Effective inline settings for a hostname: globals ← most-specific built-in
  * seed ← most-specific user rule that carries an `inlineTranslate` override.
  */
-export function resolveInlineSiteConfig(
-  settings: InlineTranslateSettings,
+export function resolveInlineSiteConfig<T extends InlineSiteBase>(
+  settings: T,
   hostname: string,
   userRules: SiteRule[] = [],
-): ResolvedInlineSiteConfig {
-  const resolved: ResolvedInlineSiteConfig = { ...settings, autoLanguageSelectors: [] };
+): T & { autoLanguageSelectors: string[] } {
+  const resolved: T & { autoLanguageSelectors: string[] } = { ...settings, autoLanguageSelectors: [] };
 
   let seed: InlineSiteOverride | undefined;
   let seedScore = -1;

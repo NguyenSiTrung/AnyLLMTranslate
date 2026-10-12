@@ -21,7 +21,7 @@ import {
   removeToast,
 } from '@/content/inlineTranslate';
 import { runInlineTranslate } from '@/content/inlineTranslate/orchestrate';
-import type { InlineTranslateRuntimeConfig } from '@/content/inlineTranslate/types';
+import { DEFAULT_RUNTIME_CONFIG, type InlineTranslateRuntimeConfig } from '@/content/inlineTranslate/types';
 
 vi.mock('@/lib/config', () => ({
   loadSettings: vi.fn().mockResolvedValue({
@@ -34,6 +34,7 @@ vi.mock('@/lib/config', () => ({
 const mockSendMessage = vi.fn();
 
 const baseConfig = (): InlineTranslateRuntimeConfig => ({
+  ...DEFAULT_RUNTIME_CONFIG,
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,

@@ -61,3 +61,12 @@ From `conductor/patterns.md` (inline-translate sections):
   - Gotchas: built-in seeds cannot live on `BUILT_IN_RULES` objects — `loadSettings` injects built-ins only when stored `siteRules` is empty, so existing installs would never see new seed data. Layer seeds in the resolver.
   - Context: `refer/` was not present on this machine (2026-10-12), so the seed selectors are hand-written approximations of refer's `rules[].inputConfig.add` intent (conversation text near the composer), ordered by priority.
 ---
+
+## [2026-10-12] - Phase 1 Task 4: Runtime projection
+- **Implemented:** `InlineTranslateRuntimeConfig` now = settings (with `triggerKey: string`) + `autoLanguageSelectors`; `index.ts` keeps `baseConfig` (globals) + remembered `siteRules` and projects `config = resolveInlineSiteConfig(base, location.hostname, siteRules)` on every update; `updateInlineTranslateConfig(partial, { siteRules })`; `settingsToRuntime` drops every undefined key. `content.ts` passes `settings.siteRules`.
+- **Files changed:** content/inlineTranslate/types.ts, content/inlineTranslate/index.ts, lib/siteRules.ts (generic resolver), entrypoints/content.ts, content/__tests__/inlineTranslate*.test.ts
+- **Learnings:**
+  - Gotchas: `index.ts` tests mock `@/lib/config` with only `loadSettings`, so content modules must not import other helpers from `lib/config` (they come back undefined). `lib/siteRules` is safe (types-only imports).
+  - Gotchas: runtime gesture timing defaults stay at the legacy 0/0/0 until P2T3 rewrites the FSM and its tests (TODO in `types.ts`).
+  - Patterns: test runtime-config helpers spread `DEFAULT_RUNTIME_CONFIG` first so new fields never break their type.
+---

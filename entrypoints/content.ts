@@ -1808,7 +1808,7 @@ async function initInteractionFeatures(): Promise<void> {
   // Always apply inline translate settings (defaults are guaranteed by loadSettings)
   if (settings.inlineTranslate) {
     setInlineTranslateEnabled(settings.inlineTranslate.enabled !== false);
-    updateInlineTranslateConfig(settings.inlineTranslate);
+    updateInlineTranslateConfig(settings.inlineTranslate, { siteRules: settings.siteRules ?? [] });
   }
 
   // Listen for settings changes to toggle features dynamically
@@ -1852,7 +1852,10 @@ async function initInteractionFeatures(): Promise<void> {
       // Inline translate settings
       if (newSettings.inlineTranslate) {
         setInlineTranslateEnabled(newSettings.inlineTranslate.enabled);
-        updateInlineTranslateConfig(newSettings.inlineTranslate);
+        updateInlineTranslateConfig(
+          newSettings.inlineTranslate,
+          Array.isArray(newSettings.siteRules) ? { siteRules: newSettings.siteRules } : {},
+        );
       }
     }
   };

@@ -19,7 +19,7 @@ import {
   COPY_PANEL_CLASS,
 } from '@/content/inlineTranslate/feedback';
 import { runInlineTranslate, tryFallbackUndo } from '@/content/inlineTranslate/orchestrate';
-import type { InlineTranslateRuntimeConfig } from '@/content/inlineTranslate/types';
+import { DEFAULT_RUNTIME_CONFIG, type InlineTranslateRuntimeConfig } from '@/content/inlineTranslate/types';
 
 vi.mock('@/lib/config', () => ({
   loadSettings: vi.fn().mockResolvedValue({
@@ -32,6 +32,7 @@ vi.mock('@/lib/config', () => ({
 const mockSendMessage = vi.fn();
 
 const cfg = (over: Partial<InlineTranslateRuntimeConfig> = {}): InlineTranslateRuntimeConfig => ({
+  ...DEFAULT_RUNTIME_CONFIG,
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,

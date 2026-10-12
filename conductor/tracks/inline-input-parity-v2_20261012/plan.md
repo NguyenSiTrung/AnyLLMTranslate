@@ -20,9 +20,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
   <!-- files: types/config.ts, lib/siteRules.ts, lib/__tests__/siteRules.test.ts -->
   - [x] Test: most-specific rule wins; absent keys fall through to globals; built-in seeds for x.com/twitter.com, reddit.com, youtube.com, discord.com, web.telegram.org, web.whatsapp.com carry refer `autoLanguageSelectors`
   - [x] `resolveInlineSiteConfig(settings, hostname)` pure function
-- [ ] Task 4: Runtime projection (FR-14, FR-8)
+- [x] Task 4: Runtime projection (FR-14, FR-8)
   <!-- files: content/inlineTranslate/types.ts, content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts -->
-  - [ ] Test: `settingsToRuntime` carries new fields and applies site overrides for `location.hostname`; partial updates never clobber arrays with `undefined`
+  - [x] Test: `settingsToRuntime` carries new fields and applies site overrides for `location.hostname`; partial updates never clobber arrays with `undefined`
 - [ ] Task: Conductor - Phase Verification 'Phase 1' (automated gates only)
 
 ## Phase 2: Trigger engine — keys, tail gate, removeTail, FSM

@@ -197,6 +197,47 @@ describe('configuration', () => {
     setInlineTranslateEnabled(false);
     expect(getInlineTranslateConfig().enabled).toBe(false);
   });
+
+  it('projects the new settings fields and applies site overrides for location.hostname', () => {
+    const before = getInlineTranslateConfig().blocklistPatterns;
+
+    updateInlineTranslateConfig(
+      { cancelWindowMs: 2500, minDurationMs: 900, gestureEnabled: false, autoLanguagePageEnable: true },
+      {
+        siteRules: [
+          {
+            id: 'local',
+            hostname: location.hostname,
+            includeSelectors: [],
+            excludeSelectors: [],
+            alwaysTranslate: false,
+            neverTranslate: false,
+            builtIn: false,
+            inlineTranslate: { cancelWindowMs: 1200, autoLanguageSelectors: ['.msg'] },
+          },
+        ],
+      },
+    );
+
+    expect(getInlineTranslateConfig()).toMatchObject({
+      cancelWindowMs: 1200,
+      minDurationMs: 900,
+      gestureEnabled: false,
+      autoLanguagePageEnable: true,
+      autoLanguageSelectors: ['.msg'],
+    });
+    // Partial updates never clobber arrays or the remembered site rules.
+    updateInlineTranslateConfig({ minDurationMs: 1000 });
+    expect(getInlineTranslateConfig()).toMatchObject({
+      cancelWindowMs: 1200,
+      minDurationMs: 1000,
+      autoLanguageSelectors: ['.msg'],
+    });
+    expect(getInlineTranslateConfig().blocklistPatterns).toEqual(before);
+
+    updateInlineTranslateConfig({ cancelWindowMs: 3000, gestureEnabled: true }, { siteRules: [] });
+    expect(getInlineTranslateConfig()).toMatchObject({ cancelWindowMs: 3000, autoLanguageSelectors: [] });
+  });
 });
 
 /* ── Gesture Detection (Keyboard Events) ──────────────────────── */
