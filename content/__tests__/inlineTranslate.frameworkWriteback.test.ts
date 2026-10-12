@@ -40,6 +40,7 @@ const cfg = (over: Partial<InlineTranslateRuntimeConfig> = {}): InlineTranslateR
   idleMs: 0,
   triggerGapMs: 0,
   triggerToleranceCount: 0,
+  minDurationMs: 0,
   enableLanguagePrefix: true,
   languagePrefix: '/',
   dualMode: false,

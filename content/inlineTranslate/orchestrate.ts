@@ -131,6 +131,9 @@ let activeRequestId = 0;
 /** Snapshot text at request start for cancel detection */
 let activeSnapshotText: string | null = null;
 let activeElement: HTMLElement | null = null;
+/** Trigger time and cancel window of the active request (FR-9). */
+let activeTriggeredAt = 0;
+let activeCancelWindowMs = 0;
 
 export function isInlineTranslating(): boolean {
   return isTranslating;
@@ -174,6 +177,13 @@ export function cancelActiveRequest(reason = 'cancelled'): void {
   activeSnapshotText = null;
   activeElement = null;
 }
+
+/** Typing only cancels within `cancelWindowMs` of the trigger (refer `lde`). */
+function isWithinCancelWindow(): boolean {
+  return Date.now() - activeTriggeredAt <= activeCancelWindowMs;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Attempt fallback undo: restore the original draft if present.
@@ -253,7 +263,9 @@ export async function runInlineTranslate(
   config: InlineTranslateRuntimeConfig,
   options: OrchestrateOptions = {},
 ): Promise<void> {
+  // One request at a time: a trigger while busy is dropped.
   if (isTranslating) return;
+  const triggeredAt = Date.now();
 
   let targetEl = options.element ?? null;
   if (!targetEl) {
@@ -348,6 +360,8 @@ export async function runInlineTranslate(
   activeRequestId = reqId;
   activeSnapshotText = originalText;
   activeElement = targetEl;
+  activeTriggeredAt = triggeredAt;
+  activeCancelWindowMs = Math.max(0, config.cancelWindowMs ?? 0);
   isTranslating = true;
   addPulsingBorder(targetEl);
   // A fresh run supersedes any stale copy panel still floating near the field.
@@ -392,6 +406,11 @@ export async function runInlineTranslate(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage,
     })) as { success?: boolean; translatedText?: string; error?: string } | undefined;
+
+    // Keep the loading state for at least minDurationMs so a fast result does
+    // not flash; typing inside the cancel window still cancels meanwhile.
+    const holdMs = triggeredAt + Math.max(0, config.minDurationMs ?? 0) - Date.now();
+    if (holdMs > 0 && activeRequestId === reqId) await sleep(holdMs);
 
     // Abort if cancelled or identity/text changed
     if (activeRequestId !== reqId) {
@@ -470,13 +489,15 @@ export async function runInlineTranslate(
 }
 
 /**
- * Notify that the user typed in the active field — cancel if translating.
- * Our own synthetic write-back events must not cancel anything.
+ * Notify that the user typed in the active field — cancel if translating and
+ * still inside the cancel window. Our own synthetic write-back events must not
+ * cancel anything. Later edits are caught by the pre-write draft check.
  */
 export function onUserInputDuringTranslate(el: Element | null, event?: Event): void {
   if (!isTranslating || !activeElement) return;
   if (event && isSyntheticInlineEvent(event)) return;
   if (isWritingBack) return;
+  if (!isWithinCancelWindow()) return;
   if (el === activeElement || (el && activeElement.contains(el))) {
     cancelActiveRequest('user-input');
   }

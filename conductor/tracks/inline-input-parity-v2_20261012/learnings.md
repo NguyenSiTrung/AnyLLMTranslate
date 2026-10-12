@@ -140,3 +140,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: auto-language runs on `snapshotEl` after `loadSettings`; test configs spread `DEFAULT_RUNTIME_CONFIG`, whose `autoLanguageSelectors: []` keeps legacy tests on the default target.
 ---
+
+## [2026-10-12] - Phase 4 Task 2: Cancel window + min duration + busy drop
+- **Implemented:** `onUserInputDuringTranslate` cancels only within `cancelWindowMs` of the trigger (`activeTriggeredAt`/`activeCancelWindowMs`); later edits are still caught by the pre-write draft check (draft is never overwritten). After the response, the pipeline sleeps until `triggeredAt + minDurationMs` before the identity/draft/focus checks and the write. A trigger while busy is dropped (existing `isTranslating` guard, now tested).
+- **Files changed:** content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.chatHardening.test.ts (+ `minDurationMs: 0` in parity/frameworkWriteback cfg helpers)
+- **Learnings:**
+  - Gotchas: `vi.useFakeTimers({ shouldAdvanceTime: true })` lets real time leak into `Date.now()`; ms-boundary tests (2999 vs 3001) re-init plain `vi.useFakeTimers()`. Gesture-driven tests run on the module config, so chatHardening's top-level beforeEach sets `updateInlineTranslateConfig({ minDurationMs: 0 })`.
+---

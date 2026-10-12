@@ -65,10 +65,10 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 1: Wire language precedence + same-language notice into orchestrate (FR-6, FR-7)
   <!-- files: content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.parity.test.ts -->
   - [x] Test: explicit > auto_selector > auto_page > default; prefix stripped from written result; result equal to source + same language → notice, field untouched
-- [ ] Task 2: Cancel window + min-duration + busy drop (FR-9)
+- [x] Task 2: Cancel window + min-duration + busy drop (FR-9)
   <!-- files: content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.chatHardening.test.ts -->
   <!-- depends: task1 -->
-  - [ ] Test: input at 2999 ms cancels, 3001 ms ignored; own write-back excluded; write held until 1500 ms; trigger while busy dropped
+  - [x] Test: input at 2999 ms cancels, 3001 ms ignored; own write-back excluded; write held until 1500 ms; trigger while busy dropped
 - [ ] Task 3: Loading overlay (FR-10)
   <!-- files: content/inlineTranslate/overlay.ts, content/__tests__/inlineTranslate.overlay.test.ts -->
   - [ ] Test: shadow-root host mounted next to field, follows field rect, removed on write/cancel/error

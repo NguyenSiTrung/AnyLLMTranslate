@@ -19,6 +19,7 @@ import {
   undoMap,
   removeToast,
   TOAST_CLASS,
+  updateInlineTranslateConfig,
 } from '@/content/inlineTranslate';
 import {
   isFrameworkOwnedEditor,
@@ -26,7 +27,12 @@ import {
   writeElementTextAsync,
   isSyntheticInlineEvent,
 } from '@/content/inlineTranslate/writeback';
-import { runInlineTranslate, tryFallbackUndo, lastWrittenMap } from '@/content/inlineTranslate/orchestrate';
+import {
+  runInlineTranslate,
+  tryFallbackUndo,
+  lastWrittenMap,
+  isInlineTranslating,
+} from '@/content/inlineTranslate/orchestrate';
 import { DEFAULT_RUNTIME_CONFIG, type InlineTranslateRuntimeConfig } from '@/content/inlineTranslate/types';
 
 vi.mock('@/lib/config', () => ({
@@ -48,6 +54,7 @@ const cfg = (over: Partial<InlineTranslateRuntimeConfig> = {}): InlineTranslateR
   idleMs: 0,
   triggerGapMs: 0,
   triggerToleranceCount: 0,
+  minDurationMs: 0,
   enableLanguagePrefix: true,
   languagePrefix: '/',
   dualMode: false,
@@ -68,6 +75,8 @@ beforeEach(() => {
   });
   mockSendMessage.mockReset();
   document.body.innerHTML = '';
+  // Legacy cases assert the write right after the response.
+  updateInlineTranslateConfig({ minDurationMs: 0 });
 });
 
 afterEach(() => {
@@ -452,6 +461,111 @@ describe('cancel-on-type during write-back', () => {
     await vi.advanceTimersByTimeAsync(10);
 
     expect(typed.value).toBe('hello world!');
+  });
+});
+
+/* ── Pacing: cancel window, min duration, busy drop (FR-9) ─────── */
+
+describe('pacing: cancel window, min duration, busy drop', () => {
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers();
+    cleanup = initInlineTranslate();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  function focusedInput(value: string): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value;
+    document.body.appendChild(input);
+    input.focus();
+    return input;
+  }
+
+  function pending(): (v: unknown) => void {
+    let release: (v: unknown) => void = () => {};
+    mockSendMessage.mockReturnValueOnce(new Promise((r) => { release = r; }));
+    return (v) => release(v);
+  }
+
+  const userInput = (el: Element) =>
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'x' }));
+
+  const start = (el: HTMLElement, over: Partial<InlineTranslateRuntimeConfig> = {}) =>
+    runInlineTranslate(cfg({ minDurationMs: 0, cancelWindowMs: 3000, ...over }), {
+      element: el,
+      skipStripTrailing: true,
+    });
+
+  it('user input at 2999 ms cancels; at 3001 ms it is ignored', async () => {
+    const early = focusedInput('hello');
+    const releaseEarly = pending();
+    void start(early);
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(isInlineTranslating()).toBe(true);
+    userInput(early);
+    expect(isInlineTranslating()).toBe(false);
+    releaseEarly({ success: true, translatedText: 'xin chào' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(early.value).toBe('hello');
+
+    const late = focusedInput('hello');
+    const releaseLate = pending();
+    void start(late);
+    await vi.advanceTimersByTimeAsync(3001);
+    userInput(late);
+    expect(isInlineTranslating()).toBe(true);
+    releaseLate({ success: true, translatedText: 'xin chào' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(late.value).toBe('xin chào');
+  });
+
+  it('our own write-back events inside the window do not cancel', async () => {
+    const input = focusedInput('hello');
+    mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'xin chào' });
+    void start(input);
+    await vi.advanceTimersByTimeAsync(10);
+    expect(input.value).toBe('xin chào');
+    expect(input.getAttribute('data-anyllm-inline-translated')).toBe('1');
+  });
+
+  it('holds the write until minDurationMs has passed since the trigger', async () => {
+    const input = focusedInput('hello');
+    mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'xin chào' });
+    void start(input, { minDurationMs: 1500 });
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(input.value).toBe('hello');
+    expect(isInlineTranslating()).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(input.value).toBe('xin chào');
+  });
+
+  it('input inside the window during the hold still cancels', async () => {
+    const input = focusedInput('hello');
+    mockSendMessage.mockResolvedValueOnce({ success: true, translatedText: 'xin chào' });
+    void start(input, { minDurationMs: 1500 });
+    await vi.advanceTimersByTimeAsync(800);
+    userInput(input);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(input.value).toBe('hello');
+  });
+
+  it('drops a trigger while a request is in flight', async () => {
+    const input = focusedInput('hello');
+    const release = pending();
+    void start(input);
+    await vi.advanceTimersByTimeAsync(10);
+    await start(input);
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    release({ success: true, translatedText: 'xin chào' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(input.value).toBe('xin chào');
   });
 });
 
