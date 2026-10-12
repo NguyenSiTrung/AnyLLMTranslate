@@ -841,3 +841,70 @@ describe('two-branch gesture FSM (refer truth table)', () => {
     expect(s.triggers).toHaveLength(1);
   });
 });
+
+describe('language precedence + same-language notice', () => {
+  const JA = 'これは日本語のメッセージです。よろしくお願いします。';
+
+  function field(value: string): HTMLTextAreaElement {
+    document.body.insertAdjacentHTML('beforeend', `<div class="thread"><p class="msg">${JA}</p></div>`);
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    document.querySelector('.thread')!.appendChild(ta);
+    return ta;
+  }
+
+  async function run(el: HTMLElement, over: Partial<InlineTranslateRuntimeConfig> = {}) {
+    await runInlineTranslate({ ...baseConfig(), ...over }, { element: el, skipStripTrailing: true });
+    await vi.advanceTimersByTimeAsync(10);
+    return mockSendMessage.mock.calls.at(-1)?.[0] as { text: string; targetLanguage: string };
+  }
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('lang');
+  });
+
+  it('explicit prefix beats selectors, selectors beat page, page beats default', async () => {
+    document.documentElement.lang = 'de';
+    mockSendMessage.mockResolvedValue({ success: true, translatedText: 'out' });
+    const selectors = { autoLanguageSelectors: ['parentElementTo .thread .msg'] };
+
+    expect(await run(field('/ko xin chào'), { ...selectors, autoLanguagePageEnable: true })).toMatchObject(
+      { text: 'xin chào', targetLanguage: 'ko' },
+    );
+    document.body.innerHTML = '';
+    expect((await run(field('xin chào'), { ...selectors, autoLanguagePageEnable: true })).targetLanguage).toBe(
+      'ja',
+    );
+    document.body.innerHTML = '';
+    expect((await run(field('xin chào'), { autoLanguagePageEnable: true })).targetLanguage).toBe('de');
+    document.body.innerHTML = '';
+    expect((await run(field('xin chào'), { ...selectors, autoLanguageEnable: false })).targetLanguage).toBe(
+      'en',
+    );
+  });
+
+  it('writes the translation without the prefix token', async () => {
+    mockSendMessage.mockResolvedValue({ success: true, translatedText: 'hello' });
+    const ta = field('//en xin chào');
+    await run(ta);
+    expect(ta.value).toBe('hello');
+  });
+
+  it('same language and unchanged result → notice, field untouched', async () => {
+    const draft = 'Hello there, this is the message that you wanted to read';
+    mockSendMessage.mockResolvedValue({ success: true, translatedText: `${draft} ` });
+    const ta = field(draft);
+    await run(ta);
+    expect(ta.value).toBe(draft);
+    expect(ta.getAttribute('data-anyllm-inline-translated')).toBeNull();
+    expect(document.body.textContent).toContain('Already in English');
+  });
+
+  it('changed result in the same language is still written', async () => {
+    const draft = 'Hello there, this is the message that you wanted to read';
+    mockSendMessage.mockResolvedValue({ success: true, translatedText: 'Hi, here is the message you wanted' });
+    const ta = field(draft);
+    await run(ta);
+    expect(ta.value).toBe('Hi, here is the message you wanted');
+  });
+});

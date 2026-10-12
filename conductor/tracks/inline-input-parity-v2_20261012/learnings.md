@@ -133,3 +133,10 @@ From `conductor/patterns.md` (inline-translate sections):
 ## [2026-10-12] - Phase 3 Verification
 - **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 880/881 (126/127 files); only red = streamStats `dedupes identical source text… bedw` (known flake `AnyLLMTranslate-slmv`, also red at base).
 ---
+
+## [2026-10-12] - Phase 4 Task 1: Language precedence + same-language notice
+- **Implemented:** orchestrate resolves the target as explicit prefix → `resolveAutoTargetLanguage` (auto_selector → auto_page → default). `lastWrittenMap` entries now carry `targetLanguage` and `source` (`InlineTargetSource`) for the language bar. When the result equals the draft (whitespace-normalized) and the draft is detected as the target language, the pipeline shows "Already in <Language>" and leaves the field untouched.
+- **Files changed:** content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.parity.test.ts
+- **Learnings:**
+  - Gotchas: auto-language runs on `snapshotEl` after `loadSettings`; test configs spread `DEFAULT_RUNTIME_CONFIG`, whose `autoLanguageSelectors: []` keeps legacy tests on the default target.
+---

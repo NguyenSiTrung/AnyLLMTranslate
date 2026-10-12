@@ -7,6 +7,9 @@
 
 import { loadSettings } from '@/lib/config';
 import { parseLanguagePrefix } from '@/lib/inlineTranslatePrefix';
+import { detectLanguage, isSameLanguage } from '@/lib/langDetect';
+import { getLanguageName } from '@/lib/languages';
+import { resolveAutoTargetLanguage, type InlineLanguageSource } from './autoLanguage';
 import {
   getDeepActiveElement,
   getElementText,
@@ -99,6 +102,9 @@ export interface UndoEntry {
   html: string | null;
 }
 
+/** Where the request's target language came from (language bar badge). */
+export type InlineTargetSource = 'explicit' | InlineLanguageSource;
+
 /** Fallback undo: element → original draft before the last translation */
 export const undoMap = new WeakMap<Element, UndoEntry>();
 
@@ -108,7 +114,10 @@ export const undoMap = new WeakMap<Element, UndoEntry>();
  * typed/deleted, re-trigger translates the new content instead of restoring the
  * original.
  */
-export const lastWrittenMap = new WeakMap<Element, { text: string; at: number }>();
+export const lastWrittenMap = new WeakMap<
+  Element,
+  { text: string; at: number; targetLanguage?: string; source?: InlineTargetSource }
+>();
 
 /** Elements already watched for draft edits (listener attached once). */
 const undoWatchAttached = new WeakSet<Element>();
@@ -216,6 +225,18 @@ export function shouldFallbackUndo(
   if (lastWritten == null) return false;
   if (Date.now() - lastWritten.at >= UNDO_WINDOW_MS) return false;
   return currentTextAfterStrip === lastWritten.text;
+}
+
+function sameText(a: string, b: string): boolean {
+  return a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * The draft was already in the target language and the model echoed it back
+ * (refer `Pde`): nothing to write.
+ */
+function isAlreadyInTarget(source: string, result: string, targetLanguage: string): boolean {
+  return sameText(source, result) && isSameLanguage(detectLanguage(source).lang, targetLanguage);
 }
 
 /** Clear translate/undo bookkeeping so the next trigger always translates. */
@@ -335,11 +356,18 @@ export async function runInlineTranslate(
 
   try {
     const settings = await loadSettings();
-    const targetLanguage =
-      targetLanguageOverride ??
-      config.targetLanguage ??
-      settings.inlineTranslate?.targetLanguage ??
-      settings.targetLanguage;
+    const defaultTarget =
+      config.targetLanguage ?? settings.inlineTranslate?.targetLanguage ?? settings.targetLanguage;
+    // explicit prefix → auto_selector → auto_page → default
+    const resolvedTarget: { lang: string; source: InlineTargetSource } = targetLanguageOverride
+      ? { lang: targetLanguageOverride, source: 'explicit' }
+      : resolveAutoTargetLanguage(snapshotEl, {
+          autoLanguageEnable: config.autoLanguageEnable !== false,
+          autoLanguagePageEnable: config.autoLanguagePageEnable === true,
+          autoLanguageSelectors: config.autoLanguageSelectors ?? [],
+          targetLanguage: defaultTarget,
+        });
+    const targetLanguage = resolvedTarget.lang;
 
     // Cancel if user edited during await of loadSettings
     if (activeRequestId !== reqId) return;
@@ -386,6 +414,10 @@ export async function runInlineTranslate(
     }
 
     if (response?.success && response.translatedText) {
+      if (isAlreadyInTarget(text, response.translatedText, targetLanguage)) {
+        showToast(snapshotEl, `Already in ${getLanguageName(targetLanguage)}`, 'success');
+        return;
+      }
       let out: string = response.translatedText;
       if (config.dualMode) {
         out = joinDualMode(text, response.translatedText, snapshotEl);
@@ -393,7 +425,12 @@ export async function runInlineTranslate(
       const write = await writeSafeAsync(snapshotEl, out);
       if (write.success) {
         undoMap.set(snapshotEl, { text: originalText, html: originalHtml });
-        lastWrittenMap.set(snapshotEl, { text: out, at: Date.now() });
+        lastWrittenMap.set(snapshotEl, {
+          text: out,
+          at: Date.now(),
+          targetLanguage,
+          source: resolvedTarget.source,
+        });
         snapshotEl.setAttribute('data-anyllm-inline-translated', '1');
         showToast(snapshotEl, 'Translated ✓', 'success');
       } else if (write.reason === 'framework-editor') {

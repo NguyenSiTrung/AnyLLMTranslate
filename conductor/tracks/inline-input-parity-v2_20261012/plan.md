@@ -62,9 +62,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 <!-- execution: parallel -->
 <!-- depends: phase2, phase3 -->
 
-- [ ] Task 1: Wire language precedence + same-language notice into orchestrate (FR-6, FR-7)
+- [x] Task 1: Wire language precedence + same-language notice into orchestrate (FR-6, FR-7)
   <!-- files: content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.parity.test.ts -->
-  - [ ] Test: explicit > auto_selector > auto_page > default; prefix stripped from written result; result equal to source + same language → notice, field untouched
+  - [x] Test: explicit > auto_selector > auto_page > default; prefix stripped from written result; result equal to source + same language → notice, field untouched
 - [ ] Task 2: Cancel window + min-duration + busy drop (FR-9)
   <!-- files: content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.chatHardening.test.ts -->
   <!-- depends: task1 -->
