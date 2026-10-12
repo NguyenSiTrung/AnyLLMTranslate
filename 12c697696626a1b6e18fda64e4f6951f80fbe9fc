@@ -1,0 +1,1 @@
+P1T2: migrateInlineParityV2 + normalizeInlineTriggerTimeoutMs/Key (FR-14). Tests: lib/__tests__/settings.test.ts 'inline parity v2 migration'
