@@ -53,9 +53,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 1: Prefix parser upgrade (FR-6)
   <!-- files: lib/inlineTranslatePrefix.ts, lib/__tests__/inlineTranslatePrefix.test.ts -->
   - [x] Test: `//en hello`, `、、英文 hello`, `;;ja x`, `none` disables, prefix-only → no request, code↔name aliases both directions, starting key ≠ trailing key
-- [ ] Task 2: Auto target language detector (FR-7)
+- [x] Task 2: Auto target language detector (FR-7)
   <!-- files: content/inlineTranslate/autoLanguage.ts, content/__tests__/inlineTranslate.autoLanguage.test.ts -->
-  - [ ] Test: `parentElementTo` first-match, plain selector all-matches, own injected nodes excluded, page fallback only when enabled, default otherwise; returns `{ lang, source: 'auto_selector' | 'auto_page' | 'default' }`
+  - [x] Test: `parentElementTo` first-match, plain selector all-matches, own injected nodes excluded, page fallback only when enabled, default otherwise; returns `{ lang, source: 'auto_selector' | 'auto_page' | 'default' }`
 - [ ] Task: Conductor - Phase Verification 'Phase 3' (automated gates only)
 
 ## Phase 4: Pipeline wiring, pacing and in-page UI

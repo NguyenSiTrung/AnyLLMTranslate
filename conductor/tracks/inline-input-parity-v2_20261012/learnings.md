@@ -121,3 +121,11 @@ From `conductor/patterns.md` (inline-translate sections):
   - Patterns: the key alias table lives in `lib/inlineTriggerKeys.ts` so lib code (prefix parser) never imports from `content/`.
   - Gotchas: 3+ starting chars are rejected (`///en` stays text); prefix-only gives an empty body, which orchestrate already treats as "nothing to translate".
 ---
+
+## [2026-10-12] - Phase 3 Task 2: Auto target language detector
+- **Implemented:** `resolveAutoTargetLanguage(field, opts)` → `{ lang, source }`. Ordered selectors (the first one whose text yields a detectable language wins): `parentElementTo <ancestor> <selector>` = closest ancestor, then first non-excluded match; plain selectors = all matches (2000-char sample). Text walker skips our injected nodes (`[data-anyllm-owned]`, `[data-anyllm-role]`, translation/inline classes), script/style, and the field subtree. Page fallback (only with `autoLanguagePageEnable`): `<html lang>` normalized (`de-DE`→`de`, `zh-Hant`→`zh-TW`), else body-text detection.
+- **Files changed:** content/inlineTranslate/autoLanguage.ts, content/__tests__/inlineTranslate.autoLanguage.test.ts
+- **Learnings:**
+  - Patterns: Phase 4 in-page UI (overlay, language bar, modals) must carry `data-anyllm-owned` so auto-language never reads it.
+  - Gotchas: `detectLanguage` returns Han-only text as `zh` with ≤0.72 confidence and Latin guesses from 0.3; detections under 0.5 are ignored. Invalid user selectors are swallowed (try/catch around `closest`/`querySelectorAll`).
+---
