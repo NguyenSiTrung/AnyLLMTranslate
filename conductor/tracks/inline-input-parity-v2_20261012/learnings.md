@@ -197,3 +197,11 @@ From `conductor/patterns.md` (inline-translate sections):
 ## [2026-10-12] - Phase 5 Verification
 - **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 928/928 (133/133 files) — fully green run.
 ---
+
+## [2026-10-12] - Phase 6 Task 1: Inline stats attribution (FR-16)
+- **Implemented:** `TranslateSelectionMessage.origin?: 'inline'`; background plain-sentence path records `mode: 'inline'` (cache hit + API success) when origin is inline; orchestrate sends `origin: 'inline'`.
+- **Files changed:** types/messages.ts, services/background.ts, content/inlineTranslate/orchestrate.ts, services/__tests__/background.selectionDictionary.test.ts, content/__tests__/inlineTranslate.test.ts
+- **Learnings:**
+  - Patterns: statsCollector already derives `inlineEvents` from `mode === 'inline'`; attribution is just the right `mode` at the `recordUsage` call site.
+  - Gotchas: the stats harness (getStatsV2/resetStats/mockFetch) lives in background.selectionDictionary.test.ts, not background.test.ts as the plan named — test placed there. Dictionary path stays `'selection'` (inline never sets dictionaryMode).
+---

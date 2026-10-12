@@ -520,6 +520,7 @@ export async function runInlineTranslate(
       text,
       sourceLanguage: settings.sourceLanguage,
       targetLanguage,
+      origin: 'inline',
     })) as { success?: boolean; translatedText?: string; error?: string } | undefined;
 
     // Keep the loading state for at least minDurationMs so a fast result does

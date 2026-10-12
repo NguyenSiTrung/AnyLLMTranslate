@@ -439,4 +439,35 @@ describe('handleTranslateSelection — dictionary mode', () => {
       expect(stats.lifetime.selectionEvents).toBe(2);
     });
   });
+
+  it('attributes inline-origin requests to inlineEvents (API and cache hit), not selectionEvents (FR-16)', async () => {
+    mockStorage['anyllm-translate-settings'] = baseProviderSettings();
+    await resetStats();
+    const sender = { tab: { id: 1, url: 'https://chat.example.com/c' } } as chrome.runtime.MessageSender;
+    const inlineMsg = {
+      action: 'translateSelection' as const,
+      text: 'inline',
+      sourceLanguage: 'en',
+      targetLanguage: 'vi',
+      origin: 'inline' as const,
+    };
+
+    mockFetch(JSON.stringify({ translations: { selection: 'nội tuyến' } }));
+    await handleMessage(inlineMsg, sender);
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.apiCalls).toBe(1);
+      expect(stats.lifetime.inlineEvents).toBe(1);
+    });
+
+    // Second identical request is a cache hit — still inline.
+    await handleMessage(inlineMsg, sender);
+    await vi.waitFor(async () => {
+      const stats = await getStatsV2();
+      expect(stats.lifetime.cacheHits).toBe(1);
+      expect(stats.lifetime.inlineEvents).toBe(2);
+    });
+    const stats = await getStatsV2();
+    expect(stats.lifetime.selectionEvents ?? 0).toBe(0);
+  });
 });

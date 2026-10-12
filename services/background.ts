@@ -2751,6 +2751,7 @@ async function handleTranslateSelection(
     }
 
     // --- Plain sentence path (default; hover/inline/dictionary-off) ---
+    const usageMode = message.origin === 'inline' ? 'inline' : 'selection';
     const cached = await getCachedTranslation(
       message.text,
       message.sourceLanguage,
@@ -2759,7 +2760,7 @@ async function handleTranslateSelection(
     );
     if (cached !== null) {
       recordUsage({
-        mode: 'selection',
+        mode: usageMode,
         cacheHits: 1,
         cacheCharacters: message.text.length,
         host: hostFromSender(sender),
@@ -2793,7 +2794,7 @@ async function handleTranslateSelection(
       );
 
       recordUsage({
-        mode: 'selection',
+        mode: usageMode,
         characters: message.text.length,
         apiCalls: 1,
         host,

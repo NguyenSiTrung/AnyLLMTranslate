@@ -214,6 +214,8 @@ export interface TranslateSelectionMessage {
   dictionaryMode?: boolean;
   /** Surrounding DOM context for dictionary prompts (optional, capped). */
   contextText?: string;
+  /** Caller feature for stats attribution; inline input translate sets 'inline'. */
+  origin?: 'inline';
 }
 
 /** Structured dictionary payload returned when word-mode succeeds. */

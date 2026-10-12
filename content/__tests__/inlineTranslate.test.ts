@@ -296,6 +296,7 @@ describe('gesture detection', () => {
       expect.objectContaining({
         action: 'translateSelection',
         text: 'xin chào',
+        origin: 'inline',
       }),
     );
 
