@@ -296,6 +296,7 @@ describe('webTranslateLifecycle', () => {
         findMatchingRule: vi.fn(() => undefined),
         findEffectiveRule: vi.fn(() => undefined),
         mergeExcludeSelectors: vi.fn(() => []),
+        resolveInlineSiteConfig: vi.fn((settings: object) => ({ ...settings, autoLanguageSelectors: [] })),
       }));
       vi.doMock('@/lib/langDetect', () => ({
         detectLanguage: vi.fn(() => ({ lang: 'en', confidence: 0.5 })),

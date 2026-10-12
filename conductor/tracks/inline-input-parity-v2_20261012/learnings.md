@@ -70,3 +70,9 @@ From `conductor/patterns.md` (inline-translate sections):
   - Gotchas: runtime gesture timing defaults stay at the legacy 0/0/0 until P2T3 rewrites the FSM and its tests (TODO in `types.ts`).
   - Patterns: test runtime-config helpers spread `DEFAULT_RUNTIME_CONFIG` first so new fields never break their type.
 ---
+
+## [2026-10-12] - Phase 1 Verification
+- **Gates:** `pnpm test` 848/848 (123 files) on the rerun, `pnpm compile` 0, `pnpm lint` 37 (baseline).
+- **Learnings:**
+  - Gotchas: `content/__tests__/webTranslateLifecycle.test.ts` `vi.doMock('@/lib/siteRules')` with a fixed export list; the inline module resolves its config at import time, so a new `lib/siteRules` export it uses must be added to that mock or all 33 lifecycle cases fail on import.
+---

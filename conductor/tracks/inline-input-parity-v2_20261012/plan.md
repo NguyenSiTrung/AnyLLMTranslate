@@ -23,7 +23,7 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 4: Runtime projection (FR-14, FR-8)
   <!-- files: content/inlineTranslate/types.ts, content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts -->
   - [x] Test: `settingsToRuntime` carries new fields and applies site overrides for `location.hostname`; partial updates never clobber arrays with `undefined`
-- [ ] Task: Conductor - Phase Verification 'Phase 1' (automated gates only)
+- [x] Task: Conductor - Phase Verification 'Phase 1' (automated gates only)
 
 ## Phase 2: Trigger engine — keys, tail gate, removeTail, FSM
 <!-- execution: sequential -->
