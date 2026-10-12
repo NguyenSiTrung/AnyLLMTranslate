@@ -56,7 +56,7 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 2: Auto target language detector (FR-7)
   <!-- files: content/inlineTranslate/autoLanguage.ts, content/__tests__/inlineTranslate.autoLanguage.test.ts -->
   - [x] Test: `parentElementTo` first-match, plain selector all-matches, own injected nodes excluded, page fallback only when enabled, default otherwise; returns `{ lang, source: 'auto_selector' | 'auto_page' | 'default' }`
-- [ ] Task: Conductor - Phase Verification 'Phase 3' (automated gates only)
+- [x] Task: Conductor - Phase Verification 'Phase 3' (automated gates only)
 
 ## Phase 4: Pipeline wiring, pacing and in-page UI
 <!-- execution: parallel -->

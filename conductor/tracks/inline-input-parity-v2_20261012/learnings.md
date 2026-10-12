@@ -129,3 +129,7 @@ From `conductor/patterns.md` (inline-translate sections):
   - Patterns: Phase 4 in-page UI (overlay, language bar, modals) must carry `data-anyllm-owned` so auto-language never reads it.
   - Gotchas: `detectLanguage` returns Han-only text as `zh` with ≤0.72 confidence and Latin guesses from 0.3; detections under 0.5 are ignored. Invalid user selectors are swallowed (try/catch around `closest`/`querySelectorAll`).
 ---
+
+## [2026-10-12] - Phase 3 Verification
+- **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 880/881 (126/127 files); only red = streamStats `dedupes identical source text… bedw` (known flake `AnyLLMTranslate-slmv`, also red at base).
+---
