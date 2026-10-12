@@ -210,3 +210,9 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Implemented:** product.md inline feature line rewritten for v2 + history entry; README inline bullet and shortcut note; new `conductor/patterns.md` section "Inline translate v2 — gesture FSM, precedence, in-page UI" (8 patterns elevated from this track).
 - **Files changed:** conductor/product.md, README.md, conductor/patterns.md
 ---
+
+## [2026-10-12] - Phase 6 Verification
+- **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 929/929 (133 files) on run 3 of 4.
+- **Learnings:**
+  - Gotchas: under load avg ~18 full runs took ~170 s and the red set moved (3 → 0 → 2). Run 4 added `background.translate.test.ts` FR-3 partitioning to the slmv flake family alongside `streamStats` (isolated 3/3 green; noted on `AnyLLMTranslate-slmv`).
+---
