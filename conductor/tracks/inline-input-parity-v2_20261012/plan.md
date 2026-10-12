@@ -72,9 +72,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 3: Loading overlay (FR-10)
   <!-- files: content/inlineTranslate/overlay.ts, content/__tests__/inlineTranslate.overlay.test.ts -->
   - [x] Test: shadow-root host mounted next to field, follows field rect, removed on write/cancel/error
-- [ ] Task 4: Target-language bar + Undo + retarget (FR-11)
+- [x] Task 4: Target-language bar + Undo + retarget (FR-11)
   <!-- files: content/inlineTranslate/languageBar.ts, content/__tests__/inlineTranslate.languageBar.test.ts -->
-  - [ ] Test: chip/menu search, source badge, retarget callback receives original draft from `undoMap`, persists `targetLanguage`, Undo restores original, auto-hide ~5 s, reopen on focus while unchanged
+  - [x] Test: chip/menu search, source badge, retarget callback receives original draft from `undoMap`, persists `targetLanguage`, Undo restores original, auto-hide ~5 s, reopen on focus while unchanged
 - [ ] Task 5: Long-text confirm + first-use guide modals (FR-12, FR-13)
   <!-- files: content/inlineTranslate/modals.ts, content/__tests__/inlineTranslate.modals.test.ts -->
   - [ ] Test: > threshold prompts; Don't ask again persists; guide once, Turn off sets `enabled: false`

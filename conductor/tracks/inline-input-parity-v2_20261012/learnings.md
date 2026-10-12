@@ -154,3 +154,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: jsdom has no layout, so tests stub `getBoundingClientRect` on the field and assert inline styles.
 ---
+
+## [2026-10-12] - Phase 4 Task 4: Target-language bar + Undo + retarget
+- **Implemented:** `showLanguageBar(options)` / `hideLanguageBar()` / `getLanguageBar()`: owned shadow-DOM toolbar below the field with a language chip opening a searchable listbox (filters on code, English and native name), a source badge (`explicit` / `auto` / `default`) and Undo. Choosing a language persists it via the injected `persistTargetLanguage` and calls `onRetarget(lang, getOriginalDraft())`. Auto-hide after 5 s of inactivity (interaction re-arms) is a soft hide that keeps a focus listener; focus reopens only while `isUnchanged()`. Explicit hide / Undo / choose / Escape fully dispose.
+- **Files changed:** content/inlineTranslate/languageBar.ts, content/__tests__/inlineTranslate.languageBar.test.ts
+- **Learnings:**
+  - Patterns: in-page UI modules take persistence and pipeline actions as callbacks, so they never import `@/lib/config` helpers (tests mock it with only `loadSettings`) and avoid an orchestrate import cycle (type-only import).
+---
