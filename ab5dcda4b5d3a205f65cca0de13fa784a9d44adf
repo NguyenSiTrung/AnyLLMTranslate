@@ -1,0 +1,1 @@
+P1T4: runtime projection with per-site overrides (FR-14, FR-8). Tests: content/__tests__/inlineTranslate.test.ts configuration
