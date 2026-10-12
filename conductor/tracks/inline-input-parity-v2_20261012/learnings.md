@@ -161,3 +161,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Patterns: in-page UI modules take persistence and pipeline actions as callbacks, so they never import `@/lib/config` helpers (tests mock it with only `loadSettings`) and avoid an orchestrate import cycle (type-only import).
 ---
+
+## [2026-10-12] - Phase 4 Task 5: Long-text confirm + first-use guide
+- **Implemented:** generic shadow-DOM `openModal` (aria-modal dialog, primary button focused, Escape/backdrop = dismiss value, one modal at a time: a new one settles the old with its dismiss value, focus restored). `needsLongTextConfirm` (> length, 0 / `confirmLongText: false` = off) + `confirmLongText` (Translate / Cancel / Don't ask again → translates and persists `{ confirmLongText: false }`). `shouldShowFirstUseGuide` + `showFirstUseGuide` (gesture, shortcut, Ctrl+Z/Undo; Enable or dismiss persists `{ inlineGuideShown: true }`; Turn off adds `enabled: false` and resolves `'off'`).
+- **Files changed:** content/inlineTranslate/modals.ts, content/__tests__/inlineTranslate.modals.test.ts
+- **Learnings:**
+  - Gotchas: lint bans non-null assertions in source (not in tests); look parts up with optional chaining or a throwing helper.
+---
