@@ -16,10 +16,10 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 2: One-shot migration `migrateInlineParityV2` (FR-14)
   <!-- files: lib/config.ts, lib/__tests__/config.test.ts -->
   - [x] Test: old fingerprints (idle 0 / gap 0 / tolerance 0) → new defaults; customized values kept; flag blocks re-run; `triggerTimeoutMs` < 100 → default, clamp 150–1000; persist on false→true like `migrateInlineGestureWindowDefaults`
-- [ ] Task 3: `SiteRule.inlineTranslate` override + resolver (FR-8)
+- [x] Task 3: `SiteRule.inlineTranslate` override + resolver (FR-8)
   <!-- files: types/config.ts, lib/siteRules.ts, lib/__tests__/siteRules.test.ts -->
-  - [ ] Test: most-specific rule wins; absent keys fall through to globals; built-in seeds for x.com/twitter.com, reddit.com, youtube.com, discord.com, web.telegram.org, web.whatsapp.com carry refer `autoLanguageSelectors`
-  - [ ] `resolveInlineSiteConfig(settings, hostname)` pure function
+  - [x] Test: most-specific rule wins; absent keys fall through to globals; built-in seeds for x.com/twitter.com, reddit.com, youtube.com, discord.com, web.telegram.org, web.whatsapp.com carry refer `autoLanguageSelectors`
+  - [x] `resolveInlineSiteConfig(settings, hostname)` pure function
 - [ ] Task 4: Runtime projection (FR-14, FR-8)
   <!-- files: content/inlineTranslate/types.ts, content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts -->
   - [ ] Test: `settingsToRuntime` carries new fields and applies site overrides for `location.hostname`; partial updates never clobber arrays with `undefined`

@@ -53,3 +53,11 @@ From `conductor/patterns.md` (inline-translate sections):
   - Patterns: per-field (not whole-triple) fingerprinting here, because under the new FSM `triggerGapMs: 0` makes a burst impossible — a partially-tuned install must still get a working gap.
   - Gotchas: `saveSettings` from a migration is fire-and-forget; a "not persisted" assertion must set every other migration flag (`safeKeyThrottleMigrated`, `inlineGestureWindowMigrated`) and yield a macrotask, or it passes vacuously.
 ---
+
+## [2026-10-12] - Phase 1 Task 3: SiteRule.inlineTranslate + resolver
+- **Implemented:** `InlineSiteOverride` type, `SiteRule.inlineTranslate?`, `BUILT_IN_INLINE_SITE_OVERRIDES` (x/twitter, reddit, youtube, discord, telegram, whatsapp), `resolveInlineSiteConfig(settings, hostname, userRules)` = globals ← most-specific seed ← most-specific user rule *carrying* an override.
+- **Files changed:** types/config.ts, lib/siteRules.ts, lib/__tests__/siteRules.test.ts
+- **Learnings:**
+  - Gotchas: built-in seeds cannot live on `BUILT_IN_RULES` objects — `loadSettings` injects built-ins only when stored `siteRules` is empty, so existing installs would never see new seed data. Layer seeds in the resolver.
+  - Context: `refer/` was not present on this machine (2026-10-12), so the seed selectors are hand-written approximations of refer's `rules[].inputConfig.add` intent (conversation text near the composer), ordered by priority.
+---

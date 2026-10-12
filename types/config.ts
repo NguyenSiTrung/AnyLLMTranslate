@@ -290,6 +290,28 @@ export interface SiteRule {
   builtIn: boolean;
   /** Optional page category override for this hostname (used in context-aware translation) */
   category?: string;
+  /** Optional inline (in-field) translation overrides for this hostname. */
+  inlineTranslate?: InlineSiteOverride;
+}
+
+/**
+ * Per-site inline translate overrides. Absent keys fall through to the global
+ * {@link InlineTranslateSettings}.
+ */
+export interface InlineSiteOverride {
+  triggerGapMs?: number;
+  idleMs?: number;
+  triggerToleranceCount?: number;
+  cancelWindowMs?: number;
+  minDurationMs?: number;
+  confirmLongTextLength?: number;
+  autoLanguageEnable?: boolean;
+  /**
+   * Conversation selectors for auto target language, tried in order. Plain
+   * selectors read every match; `parentElementTo <ancestor> <selector>` reads
+   * the first match inside the field's closest `<ancestor>`.
+   */
+  autoLanguageSelectors?: string[];
 }
 
 /** Glossary entry for term-protected translation */

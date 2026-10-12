@@ -1,4 +1,4 @@
-import type { SiteRule } from '@/types/config';
+import type { InlineSiteOverride, InlineTranslateSettings, SiteRule } from '@/types/config';
 
 /**
  * Match a hostname against a pattern.
@@ -236,4 +236,121 @@ export function findEffectiveRule(
   const userMatch = findMatchingRule(hostname, userRules);
   if (userMatch) return userMatch;
   return findMatchingRule(hostname, BUILT_IN_RULES);
+}
+
+/**
+ * Built-in inline-translate seeds for chat-style sites: conversation selectors
+ * used to pick the reply language. Kept apart from {@link BUILT_IN_RULES}
+ * because installs that already stored `siteRules` never receive new built-in
+ * rule objects; the resolver layers these under any user rule instead.
+ */
+export const BUILT_IN_INLINE_SITE_OVERRIDES: ReadonlyArray<{
+  hostname: string;
+  inlineTranslate: InlineSiteOverride;
+}> = (() => {
+  const twitter: InlineSiteOverride = {
+    autoLanguageSelectors: [
+      'parentElementTo [role="dialog"] [data-testid="tweetText"]',
+      'article[data-testid="tweet"] [data-testid="tweetText"]',
+    ],
+  };
+  const reddit: InlineSiteOverride = {
+    autoLanguageSelectors: [
+      'parentElementTo shreddit-comment [slot="comment"]',
+      'shreddit-post [slot="text-body"]',
+      'shreddit-post [slot="title"]',
+    ],
+  };
+  const youtube: InlineSiteOverride = {
+    autoLanguageSelectors: [
+      'parentElementTo ytd-comment-thread-renderer #content-text',
+      'yt-live-chat-text-message-renderer #message',
+      'ytd-watch-metadata #title',
+    ],
+  };
+  return [
+    { hostname: 'x.com', inlineTranslate: twitter },
+    { hostname: 'twitter.com', inlineTranslate: twitter },
+    { hostname: 'reddit.com', inlineTranslate: reddit },
+    { hostname: '*.reddit.com', inlineTranslate: reddit },
+    { hostname: 'youtube.com', inlineTranslate: youtube },
+    { hostname: '*.youtube.com', inlineTranslate: youtube },
+    {
+      hostname: 'discord.com',
+      inlineTranslate: { autoLanguageSelectors: ['[id^="message-content-"]'] },
+    },
+    {
+      hostname: 'web.telegram.org',
+      inlineTranslate: {
+        autoLanguageSelectors: ['.bubble.is-in .translatable-message', '.message .text-content'],
+      },
+    },
+    {
+      hostname: 'web.whatsapp.com',
+      inlineTranslate: { autoLanguageSelectors: ['.message-in .selectable-text'] },
+    },
+  ];
+})();
+
+/** Inline settings after per-site overrides, plus the conversation selectors. */
+export type ResolvedInlineSiteConfig = InlineTranslateSettings & {
+  autoLanguageSelectors: string[];
+};
+
+const INLINE_NUMERIC_OVERRIDE_KEYS = [
+  'triggerGapMs',
+  'idleMs',
+  'triggerToleranceCount',
+  'cancelWindowMs',
+  'minDurationMs',
+  'confirmLongTextLength',
+] as const;
+
+function applyInlineOverride(target: ResolvedInlineSiteConfig, override: InlineSiteOverride): void {
+  for (const key of INLINE_NUMERIC_OVERRIDE_KEYS) {
+    const value = override[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      target[key] = value;
+    }
+  }
+  if (typeof override.autoLanguageEnable === 'boolean') {
+    target.autoLanguageEnable = override.autoLanguageEnable;
+  }
+  if (Array.isArray(override.autoLanguageSelectors)) {
+    target.autoLanguageSelectors = override.autoLanguageSelectors
+      .map((selector) => selector.trim())
+      .filter(Boolean);
+  }
+}
+
+/**
+ * Effective inline settings for a hostname: globals ← most-specific built-in
+ * seed ← most-specific user rule that carries an `inlineTranslate` override.
+ */
+export function resolveInlineSiteConfig(
+  settings: InlineTranslateSettings,
+  hostname: string,
+  userRules: SiteRule[] = [],
+): ResolvedInlineSiteConfig {
+  const resolved: ResolvedInlineSiteConfig = { ...settings, autoLanguageSelectors: [] };
+
+  let seed: InlineSiteOverride | undefined;
+  let seedScore = -1;
+  for (const entry of BUILT_IN_INLINE_SITE_OVERRIDES) {
+    if (!matchHostname(hostname, entry.hostname)) continue;
+    const score = hostnamePatternSpecificity(entry.hostname);
+    if (score > seedScore) {
+      seed = entry.inlineTranslate;
+      seedScore = score;
+    }
+  }
+  if (seed) applyInlineOverride(resolved, seed);
+
+  const userRule = findMatchingRule(
+    hostname,
+    userRules.filter((rule) => rule.inlineTranslate != null),
+  );
+  if (userRule?.inlineTranslate) applyInlineOverride(resolved, userRule.inlineTranslate);
+
+  return resolved;
 }
