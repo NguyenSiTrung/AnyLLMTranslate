@@ -3,9 +3,19 @@
  * API keys are encrypted at rest via AES-GCM.
  */
 
-import type { ExtensionSettings, SiteRule, PoolProvider, PoolKey, ProviderConfig } from '@/types/config';
+import type {
+  ExtensionSettings,
+  InlineTriggerKey,
+  SiteRule,
+  PoolProvider,
+  PoolKey,
+  ProviderConfig,
+} from '@/types/config';
 import {
   DEFAULT_SETTINGS,
+  INLINE_TRIGGER_KEYS,
+  INLINE_TRIGGER_TIMEOUT_MAX_MS,
+  INLINE_TRIGGER_TIMEOUT_MIN_MS,
   CRITICAL_GLOBAL_EXCLUDES,
   DEFAULT_INLINE_TRANSLATE_SETTINGS,
   DEFAULT_KEY_MAX_RPM,
@@ -174,6 +184,48 @@ function migrateInlineGestureWindowDefaults(merged: ExtensionSettings): boolean 
 }
 
 /**
+ * Combo interval for non-space trailing keys: values below 100 ms are treated
+ * as unset (refer ignores them) and fall back to the default; the rest are
+ * clamped to the supported 150–1000 ms range.
+ */
+export function normalizeInlineTriggerTimeoutMs(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 100) {
+    return DEFAULT_INLINE_TRANSLATE_SETTINGS.triggerTimeoutMs;
+  }
+  return Math.min(INLINE_TRIGGER_TIMEOUT_MAX_MS, Math.max(INLINE_TRIGGER_TIMEOUT_MIN_MS, value));
+}
+
+/** Coerce a stored trailing key into the supported set (`'Space'` → `' '`). */
+export function normalizeInlineTriggerKey(value: unknown): InlineTriggerKey {
+  if (value === 'Space') return ' ';
+  return INLINE_TRIGGER_KEYS.includes(value as InlineTriggerKey) ? (value as InlineTriggerKey) : ' ';
+}
+
+/**
+ * One-time inline parity v2 upgrade. Stored values win the deep merge, so
+ * installs that saved settings under the old gesture defaults (idle 0 / gap 0 /
+ * tolerance 0) would keep them forever — and under the two-branch FSM a 0 gap
+ * means no burst can ever form. Each field still on its old default takes the
+ * refer default; customized values are kept. Gated by `inlineParityV2Migrated`.
+ *
+ * Returns true when the flag transitioned false→true (caller persists).
+ */
+function migrateInlineParityV2(merged: ExtensionSettings): boolean {
+  if (merged.inlineParityV2Migrated) return false;
+  merged.inlineParityV2Migrated = true;
+
+  const inline = merged.inlineTranslate;
+  if (!inline) return true;
+  if (inline.idleMs === 0) inline.idleMs = DEFAULT_INLINE_TRANSLATE_SETTINGS.idleMs;
+  if (inline.triggerGapMs === 0) inline.triggerGapMs = DEFAULT_INLINE_TRANSLATE_SETTINGS.triggerGapMs;
+  if (inline.triggerToleranceCount === 0) {
+    inline.triggerToleranceCount = DEFAULT_INLINE_TRANSLATE_SETTINGS.triggerToleranceCount;
+  }
+  inline.triggerKey = normalizeInlineTriggerKey(inline.triggerKey);
+  return true;
+}
+
+/**
  * Mirror a legacy {@link ProviderConfig} partial update into providers[0] so
  * the pool stays in sync when the setup wizard or legacy ProviderSection edits
  * the provider fields. If providers[] is empty, seeds a single-provider pool.
@@ -281,6 +333,7 @@ export async function loadSettings(): Promise<ExtensionSettings> {
         safeKeyThrottleMigrated: true,
         // Defaults already use the comfortable gesture window — mark done.
         inlineGestureWindowMigrated: true,
+        inlineParityV2Migrated: true,
         siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
       };
     }
@@ -338,6 +391,14 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     // Upgrade tight legacy inline gesture windows (500/1000ms) once per install.
     const needsGestureWindowPersist = migrateInlineGestureWindowDefaults(merged);
 
+    // Move old inline gesture defaults to the refer-parity FSM values once.
+    const needsInlineParityPersist = migrateInlineParityV2(merged);
+    if (merged.inlineTranslate) {
+      merged.inlineTranslate.triggerTimeoutMs = normalizeInlineTriggerTimeoutMs(
+        merged.inlineTranslate.triggerTimeoutMs,
+      );
+    }
+
     // Migrate legacy preset: 'ollama' → 'custom' (Ollama is OpenAI-compatible)
     if ((merged.provider.preset as string) === 'ollama') {
       merged.provider.preset = 'custom';
@@ -353,7 +414,7 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     // Persist one-time migrations so the flags stick and later intentional
     // choices (throttle "unlimited" 0s, a re-tightened gesture window) are not
     // re-upgraded on every load.
-    if (needsThrottlePersist || needsGestureWindowPersist) {
+    if (needsThrottlePersist || needsGestureWindowPersist || needsInlineParityPersist) {
       void saveSettings(merged).catch(() => {
         /* best-effort; next load will re-attempt migration */
       });

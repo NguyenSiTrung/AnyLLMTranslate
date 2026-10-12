@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_INLINE_TRANSLATE_SETTINGS, DEFAULT_SETTINGS, DEFAULT_CUSTOM_THEME, type InlineTranslateSettings, type ThemeName, type ExtensionSettings } from '@/types/config';
 import { deepMerge } from '@/lib/utils';
-import { loadSettings } from '@/lib/config';
+import { loadSettings, normalizeInlineTriggerTimeoutMs } from '@/lib/config';
 import { parseLanguagePrefix, LANGUAGE_PREFIX_ALIASES } from '@/lib/inlineTranslatePrefix';
 import { INLINE_PREVIEW_SOURCE, resolvePreviewTranslation, buildPreviewProjection } from '@/lib/inlineTranslatePreview';
 import { applyPageScopePreset, detectPageScopePreset, PAGE_SCOPE_PRESET_OPTIONS } from '@/lib/pageScopePreset';
@@ -181,6 +181,105 @@ describe('inline gesture window migration', () => {
       inlineGestureWindowMigrated: true,
     });
     expect((await loadSettings()).inlineTranslate.timeWindowMs).toBe(500);
+  });
+});
+
+describe('inline parity v2 migration', () => {
+  function mockStored(stored: Record<string, unknown>) {
+    const get = vi.fn().mockResolvedValue({ 'anyllm-translate-settings': stored });
+    const set = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis, 'chrome', {
+      value: {
+        storage: {
+          local: { get, set },
+          session: { get: vi.fn(), set: vi.fn() },
+        },
+        runtime: { id: 'test-ext' },
+      },
+      writable: true,
+      configurable: true,
+    });
+    return { set };
+  }
+
+  it('moves old-default fingerprints (idle/gap/tolerance 0) to refer defaults once and persists the flag', async () => {
+    const { set } = mockStored({
+      inlineGestureWindowMigrated: true,
+      inlineTranslate: { idleMs: 0, triggerGapMs: 0, triggerToleranceCount: 0, tapCount: 4 },
+    });
+
+    const settings = await loadSettings();
+
+    expect(settings.inlineTranslate).toMatchObject({
+      idleMs: 250,
+      triggerGapMs: 250,
+      triggerToleranceCount: 2,
+      tapCount: 4,
+    });
+    expect(settings.inlineParityV2Migrated).toBe(true);
+    await vi.waitFor(() => expect(set).toHaveBeenCalled());
+  });
+
+  it('keeps customized values and constrains triggerKey to the supported set', async () => {
+    mockStored({
+      inlineGestureWindowMigrated: true,
+      inlineTranslate: { idleMs: 400, triggerGapMs: 300, triggerToleranceCount: 1, triggerKey: 'Space' },
+    });
+    const custom = await loadSettings();
+    expect(custom.inlineTranslate).toMatchObject({
+      idleMs: 400,
+      triggerGapMs: 300,
+      triggerToleranceCount: 1,
+      triggerKey: ' ',
+    });
+
+    mockStored({ inlineGestureWindowMigrated: true, inlineTranslate: { triggerKey: 'x' } });
+    expect((await loadSettings()).inlineTranslate.triggerKey).toBe(' ');
+
+    mockStored({ inlineGestureWindowMigrated: true, inlineTranslate: { triggerKey: '/' } });
+    expect((await loadSettings()).inlineTranslate.triggerKey).toBe('/');
+  });
+
+  it('does not re-run once the flag is set', async () => {
+    const { set } = mockStored({
+      safeKeyThrottleMigrated: true,
+      inlineGestureWindowMigrated: true,
+      inlineParityV2Migrated: true,
+      inlineTranslate: { idleMs: 0, triggerGapMs: 0, triggerToleranceCount: 0 },
+    });
+
+    const settings = await loadSettings();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(settings.inlineTranslate).toMatchObject({ idleMs: 0, triggerToleranceCount: 0 });
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  it('normalizes triggerTimeoutMs: < 100 → default, otherwise clamped to 150–1000', async () => {
+    expect(normalizeInlineTriggerTimeoutMs(0)).toBe(200);
+    expect(normalizeInlineTriggerTimeoutMs(99)).toBe(200);
+    expect(normalizeInlineTriggerTimeoutMs(Number.NaN)).toBe(200);
+    expect(normalizeInlineTriggerTimeoutMs(undefined)).toBe(200);
+    expect(normalizeInlineTriggerTimeoutMs(120)).toBe(150);
+    expect(normalizeInlineTriggerTimeoutMs(400)).toBe(400);
+    expect(normalizeInlineTriggerTimeoutMs(5000)).toBe(1000);
+
+    mockStored({
+      inlineGestureWindowMigrated: true,
+      inlineParityV2Migrated: true,
+      inlineTranslate: { triggerTimeoutMs: 50 },
+    });
+    expect((await loadSettings()).inlineTranslate.triggerTimeoutMs).toBe(200);
+  });
+
+  it('marks fresh installs as migrated', async () => {
+    const get = vi.fn().mockResolvedValue({});
+    Object.defineProperty(globalThis, 'chrome', {
+      value: { storage: { local: { get, set: vi.fn() } }, runtime: { id: 'test-ext' } },
+      writable: true,
+      configurable: true,
+    });
+    expect((await loadSettings()).inlineParityV2Migrated).toBe(true);
   });
 });
 

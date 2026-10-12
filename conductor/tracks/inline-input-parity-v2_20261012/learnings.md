@@ -45,3 +45,11 @@ From `conductor/patterns.md` (inline-translate sections):
   - Gotchas: `lib/__tests__/settings.test.ts` pins `DEFAULT_INLINE_TRANSLATE_SETTINGS` too — change both when defaults move.
   - Context: the plan names `lib/__tests__/config.test.ts`, which does not exist; inline migration tests live in `lib/__tests__/settings.test.ts` ("inline gesture window migration").
 ---
+
+## [2026-10-12] - Phase 1 Task 2: migrateInlineParityV2
+- **Implemented:** per-field fingerprint upgrade (each of idle/gap/tolerance still at 0 → refer default), `normalizeInlineTriggerKey` (`'Space'`/unknown → `' '`), always-on `normalizeInlineTriggerTimeoutMs` (<100 → 200, clamp 150–1000) in `loadSettings`; fresh installs start migrated.
+- **Files changed:** lib/config.ts, lib/__tests__/settings.test.ts
+- **Learnings:**
+  - Patterns: per-field (not whole-triple) fingerprinting here, because under the new FSM `triggerGapMs: 0` makes a burst impossible — a partially-tuned install must still get a working gap.
+  - Gotchas: `saveSettings` from a migration is fire-and-forget; a "not persisted" assertion must set every other migration flag (`safeKeyThrottleMigrated`, `inlineGestureWindowMigrated`) and yield a macrotask, or it passes vacuously.
+---
