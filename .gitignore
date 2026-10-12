@@ -46,6 +46,9 @@ __pycache__
 # Reference / vendored extension code (not part of this repo)
 refer/
 
+# Locally installed REA reverse-engineering skill (machine-specific tooling)
+.agents/skills/rea/
+
 # Beads / Dolt files (added by bd init)
 .beads/proxieddb/
 
