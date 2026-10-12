@@ -35,7 +35,7 @@ Translation is BYOK (Bring Your Own Key): AnyLLMTranslate does not provide a hos
 
 - Select a word or sentence for dictionary-style definitions or a focused translation with copy, retry, speak, glossary, and pin actions.
 - Translate paragraph-level content on hover with a configurable delay and local element cache.
-- Translate text in inputs, textareas, and contenteditable fields with a configurable key gesture or the optional `Alt+I` command.
+- Translate text in inputs, textareas, and contenteditable fields with a configurable key gesture (triple Space, or a double press of `/`, `\`, `#`, `;`, `:`, `.` or `,`) or the optional `Alt+I` command. Pick the target per message with a prefix such as `//ja`, or let it follow the conversation or page language; a small language bar after each translation switches language or undoes it, and Site Rules can tune inline behavior per site.
 - Translate a selected page section without committing to a full-page translation.
 - Use browser or provider text-to-speech, keyboard shortcuts, and context-menu actions for common workflows.
 
@@ -244,7 +244,7 @@ pnpm lint
 | `Alt+Q`  | Enter or exit section-picker mode                |
 | `Escape` | Dismiss the selection tooltip or floating button |
 
-Global commands can be changed at `chrome://extensions/shortcuts`. The inline-input command has no default suggested key; bind `Alt+I` or another key there. Inline input translation can also be triggered with its configured Space-based gesture.
+Global commands can be changed at `chrome://extensions/shortcuts`. The inline-input command has no default suggested key; bind `Alt+I` or another key there. Inline input translation can also be triggered with its configured key gesture (Options → **Inline Translate**), which can be switched off for shortcut-only use.
 
 ## Privacy and security
 

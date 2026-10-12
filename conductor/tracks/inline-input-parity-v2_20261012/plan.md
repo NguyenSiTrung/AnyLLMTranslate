@@ -103,7 +103,7 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 1: Inline stats attribution (FR-16)
   <!-- files: content/inlineTranslate/orchestrate.ts, types/messages.ts, services/background.ts, services/__tests__/background.test.ts -->
   - [x] Test: inline-origin `translateSelection` records `mode: 'inline'` (increments `inlineEvents`), plain selection still `'selection'`
-- [ ] Task 2: Update `conductor/product.md`, README inline section, track learnings → `conductor/patterns.md`
+- [x] Task 2: Update `conductor/product.md`, README inline section, track learnings → `conductor/patterns.md`
 - [ ] Task: Conductor - Phase Verification 'Phase 6' (automated gates only)
 
 ## Parallelism notes
