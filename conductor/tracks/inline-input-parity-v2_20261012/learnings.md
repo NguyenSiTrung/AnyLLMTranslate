@@ -175,3 +175,7 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: a Space gesture fires `idleMs` (250) after the last tap, so the min-duration write lands at tap + 250 + 1500 ms. `persistInlineSettings` swallows the "no export on mock" error that suites mocking only `loadSettings` would throw.
 ---
+
+## [2026-10-12] - Phase 4 Verification
+- **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 914/915 (130/131 files); only red = streamStats `splits in-article and out-of-article pieces…` (known moving flake `AnyLLMTranslate-slmv`). Integration test 3/3 stable in repeat runs.
+---

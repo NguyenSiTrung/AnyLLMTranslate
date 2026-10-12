@@ -82,7 +82,7 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
   <!-- files: content/inlineTranslate/orchestrate.ts, content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.integration.test.ts -->
   <!-- depends: task2, task3, task4, task5 -->
   - [x] Integration test (textarea + contentEditable): gesture → overlay ≥ 1.5 s → write → retarget → Undo; draft unchanged before response
-- [ ] Task: Conductor - Phase Verification 'Phase 4' (automated gates only)
+- [x] Task: Conductor - Phase Verification 'Phase 4' (automated gates only)
 
 ## Phase 5: Options UI and Site Rules UI
 <!-- execution: parallel -->
