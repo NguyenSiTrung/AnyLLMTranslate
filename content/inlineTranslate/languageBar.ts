@@ -137,11 +137,18 @@ function render(options: LanguageBarOptions): HTMLElement {
   return host;
 }
 
+function part<T extends Element>(root: ParentNode, name: string): T {
+  const el = root.querySelector<T>(`[data-part="${name}"]`);
+  if (!el) throw new Error(`language bar: missing ${name}`);
+  return el;
+}
+
 function wire(host: HTMLElement, options: LanguageBarOptions): () => void {
-  const root = host.shadowRoot!;
-  const menu = root.querySelector<HTMLElement>('[data-part="menu"]')!;
-  const chip = root.querySelector<HTMLElement>('[data-part="chip"]')!;
-  const search = root.querySelector<HTMLInputElement>('[data-part="search"]')!;
+  const root = host.shadowRoot;
+  if (!root) return () => {};
+  const menu = part<HTMLElement>(root, 'menu');
+  const chip = part<HTMLElement>(root, 'chip');
+  const search = part<HTMLInputElement>(root, 'search');
   const items = Array.from(root.querySelectorAll<HTMLElement>('[data-lang]'));
 
   const setMenu = (open: boolean) => {
@@ -151,7 +158,7 @@ function wire(host: HTMLElement, options: LanguageBarOptions): () => void {
   };
 
   chip.addEventListener('click', () => setMenu(menu.hidden));
-  root.querySelector('[data-part="undo"]')!.addEventListener('click', () => {
+  part(root, 'undo').addEventListener('click', () => {
     teardown(false);
     options.onUndo();
   });
@@ -164,7 +171,7 @@ function wire(host: HTMLElement, options: LanguageBarOptions): () => void {
   });
   for (const item of items) {
     item.addEventListener('click', () => {
-      const lang = item.dataset.lang!;
+      const lang = item.dataset.lang ?? '';
       const draft = options.getOriginalDraft();
       teardown(false);
       void Promise.resolve(options.persistTargetLanguage(lang)).catch(() => {});
