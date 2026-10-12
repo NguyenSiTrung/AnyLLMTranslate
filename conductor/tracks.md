@@ -91,6 +91,7 @@ This file tracks all major tracks for the project.
 
 ## Active Tracks
 
-*(none)*
+## [ ] Track: Inline Input Translation — Reference-Parity v2
+*Link: [./conductor/tracks/inline-input-parity-v2_20261012/](./conductor/tracks/inline-input-parity-v2_20261012/)* — 🟠 High · 6 phases / 20 tasks + 6 automated phase gates · parallel enabled · Beads epic `AnyLLMTranslate-56gt`
 
 ---
