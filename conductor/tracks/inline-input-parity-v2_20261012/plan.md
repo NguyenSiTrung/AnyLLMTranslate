@@ -78,10 +78,10 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 5: Long-text confirm + first-use guide modals (FR-12, FR-13)
   <!-- files: content/inlineTranslate/modals.ts, content/__tests__/inlineTranslate.modals.test.ts -->
   - [x] Test: > threshold prompts; Don't ask again persists; guide once, Turn off sets `enabled: false`
-- [ ] Task 6: Integrate overlay, bar and modals into the pipeline (FR-9…13, AC-9)
+- [x] Task 6: Integrate overlay, bar and modals into the pipeline (FR-9…13, AC-9)
   <!-- files: content/inlineTranslate/orchestrate.ts, content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.integration.test.ts -->
   <!-- depends: task2, task3, task4, task5 -->
-  - [ ] Integration test (textarea + contentEditable): gesture → overlay ≥ 1.5 s → write → retarget → Undo; draft unchanged before response
+  - [x] Integration test (textarea + contentEditable): gesture → overlay ≥ 1.5 s → write → retarget → Undo; draft unchanged before response
 - [ ] Task: Conductor - Phase Verification 'Phase 4' (automated gates only)
 
 ## Phase 5: Options UI and Site Rules UI

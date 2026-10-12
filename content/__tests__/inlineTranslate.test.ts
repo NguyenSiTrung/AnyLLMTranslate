@@ -57,6 +57,9 @@ beforeEach(() => {
     triggerGapMs: 250,
     triggerToleranceCount: 0,
     minDurationMs: 0,
+    confirmLongText: false,
+    enableTargetLanguageBar: false,
+    inlineGuideShown: true,
   });
 
   mockSendMessage.mockReset();

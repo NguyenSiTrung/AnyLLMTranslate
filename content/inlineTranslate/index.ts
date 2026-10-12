@@ -32,6 +32,9 @@ import {
   resolveBlocklistPatterns,
 } from './blocklist';
 import { removeToast, getActiveToast } from './feedback';
+import { hideLoadingOverlay } from './overlay';
+import { hideLanguageBar } from './languageBar';
+import { closeInlineModal } from './modals';
 import { isSyntheticInlineEvent, replaceElementText } from './writeback';
 import {
   cancelActiveRequest,
@@ -123,7 +126,12 @@ function onTrigger(target: HTMLElement): void {
     return;
   }
   const host = resolveTriggerTarget(target) ?? target;
-  void runInlineTranslate(config, { element: host, skipStripTrailing: false });
+  void runInlineTranslate(config, {
+    element: host,
+    skipStripTrailing: false,
+    trigger: 'gesture',
+    onTurnOff: () => setInlineTranslateEnabled(false),
+  });
 }
 
 function gestureConfigFrom(runtime: InlineTranslateRuntimeConfig): GestureConfig {
@@ -252,6 +260,7 @@ export function setInlineTranslateEnabled(enabled: boolean): void {
     gesture?.reset();
     cancelActiveRequest('disabled');
     removeToast();
+    hideLanguageBar();
   }
 }
 
@@ -282,7 +291,7 @@ export async function translateFocusedInput(): Promise<void> {
     console.debug('[AnyLLMTranslate:inline] Alt+I — no editable focus');
     return;
   }
-  await runInlineTranslate(config, { element: deep, skipStripTrailing: true });
+  await runInlineTranslate(config, { element: deep, skipStripTrailing: true, trigger: 'shortcut' });
 }
 
 /** Initialize the inline translate feature. Returns a cleanup function. */
@@ -299,6 +308,9 @@ export function initInlineTranslate(): () => void {
     gesture = null;
     removeToast();
     cancelActiveRequest('cleanup');
+    hideLoadingOverlay();
+    hideLanguageBar();
+    closeInlineModal();
     listenersAttached = false;
   };
 

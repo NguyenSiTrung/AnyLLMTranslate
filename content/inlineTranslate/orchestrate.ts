@@ -5,7 +5,9 @@
  * or a refused write must leave exactly what the user typed.
  */
 
-import { loadSettings } from '@/lib/config';
+import { loadSettings, updateSettings } from '@/lib/config';
+import { formatGestureLabel } from '@/lib/shortcutDisplay';
+import type { InlineTranslateSettings } from '@/types/config';
 import { parseLanguagePrefix } from '@/lib/inlineTranslatePrefix';
 import { detectLanguage, isSameLanguage } from '@/lib/langDetect';
 import { getLanguageName } from '@/lib/languages';
@@ -39,6 +41,14 @@ import {
 } from './writeback';
 import type { WriteBackResult } from './writeback';
 import { passesTailGate, protectUrls, removeTail } from './tail';
+import { hideLoadingOverlay, showLoadingOverlay } from './overlay';
+import { hideLanguageBar, showLanguageBar } from './languageBar';
+import {
+  confirmLongText,
+  needsLongTextConfirm,
+  shouldShowFirstUseGuide,
+  showFirstUseGuide,
+} from './modals';
 import type { InlineTranslateRuntimeConfig } from './types';
 
 /** A stalled request must not leave the field stuck in "Translating…". */
@@ -93,6 +103,14 @@ export interface OrchestrateOptions {
   skipStripTrailing?: boolean;
   /** Explicit element; default deep active */
   element?: HTMLElement | null;
+  /** What started the run; the first-use guide only follows a gesture. */
+  trigger?: 'gesture' | 'shortcut' | 'retarget';
+  /** Translate this draft instead of the field text (language-bar retarget). */
+  sourceText?: string;
+  /** Target language chosen outside the text (wins over a prefix). */
+  targetLanguage?: string;
+  /** Called when the user turns the feature off from the first-use guide. */
+  onTurnOff?: () => void;
 }
 
 /** Original draft per element, captured before the first successful write. */
@@ -123,6 +141,10 @@ export const lastWrittenMap = new WeakMap<
 const undoWatchAttached = new WeakSet<Element>();
 
 let isTranslating = false;
+/** A modal (guide / long-text confirm) is waiting for the user. */
+let isPrompting = false;
+/** The guide is shown once even before the settings round-trip lands. */
+let guideShownThisSession = false;
 /** True while our own write-back dispatches synthetic input/change events */
 let isWritingBack = false;
 let requestSeq = 0;
@@ -169,6 +191,7 @@ export function cancelActiveRequest(reason = 'cancelled'): void {
   console.debug('[AnyLLMTranslate:inline] cancel', reason, activeRequestId);
   activeRequestId = 0;
   isTranslating = false;
+  hideLoadingOverlay();
   if (activeElement) {
     clearFeedback(activeElement);
   } else {
@@ -249,6 +272,88 @@ function isAlreadyInTarget(source: string, result: string, targetLanguage: strin
   return sameText(source, result) && isSameLanguage(detectLanguage(source).lang, targetLanguage);
 }
 
+/** Persist inline settings chosen from in-page UI (bar, modals). */
+async function persistInlineSettings(patch: Partial<InlineTranslateSettings>): Promise<void> {
+  try {
+    const settings = await loadSettings();
+    await updateSettings({ inlineTranslate: { ...settings.inlineTranslate, ...patch } });
+  } catch (error) {
+    console.warn('[AnyLLMTranslate:inline] could not save settings', error);
+  }
+}
+
+/** First-use guide (gesture only) and long-text confirm; false = do not translate. */
+async function promptBeforeTranslate(
+  config: InlineTranslateRuntimeConfig,
+  options: OrchestrateOptions,
+  textLength: number,
+): Promise<boolean> {
+  const needsGuide =
+    options.trigger === 'gesture' && !guideShownThisSession && shouldShowFirstUseGuide(config);
+  const needsConfirm = needsLongTextConfirm(textLength, config);
+  if (!needsGuide && !needsConfirm) return true;
+
+  isPrompting = true;
+  try {
+    if (needsGuide) {
+      guideShownThisSession = true;
+      const choice = await showFirstUseGuide({
+        gestureLabel: formatGestureLabel(config.tapCount, config.triggerKey),
+        shortcutLabel: 'Alt+I',
+        persist: persistInlineSettings,
+      });
+      if (choice === 'off') {
+        options.onTurnOff?.();
+        return false;
+      }
+    }
+    return needsConfirm ? await confirmLongText({ textLength, persist: persistInlineSettings }) : true;
+  } finally {
+    isPrompting = false;
+  }
+}
+
+/** Language bar after a write: retarget re-translates the original draft. */
+function openLanguageBar(
+  config: InlineTranslateRuntimeConfig,
+  el: HTMLElement,
+  targetLanguage: string,
+  source: InlineTargetSource,
+): void {
+  showLanguageBar({
+    field: el,
+    targetLanguage,
+    source,
+    getOriginalDraft: () => undoMap.get(el)?.text,
+    isUnchanged: () =>
+      el.getAttribute('data-anyllm-inline-translated') === '1' &&
+      getElementText(el) === lastWrittenMap.get(el)?.text,
+    onRetarget: (lang, draft) => {
+      void runInlineTranslate(
+        { ...config, targetLanguage: lang },
+        {
+          element: el,
+          trigger: 'retarget',
+          sourceText: draft,
+          targetLanguage: lang,
+          // Drafts sent with Alt+I have no trailing taps to strip.
+          skipStripTrailing: !passesTailGate(draft, config.triggerKey, config.tapCount),
+        },
+      );
+    },
+    onUndo: () => {
+      tryFallbackUndo(el);
+    },
+    persistTargetLanguage: (lang) => persistInlineSettings({ targetLanguage: lang }),
+  });
+}
+
+/** Test helper: forget that the guide was shown in this page session. */
+export function __resetInlinePromptsForTest(): void {
+  guideShownThisSession = false;
+  isPrompting = false;
+}
+
 /** Clear translate/undo bookkeeping so the next trigger always translates. */
 export function clearInlineTranslateState(el: HTMLElement): void {
   undoMap.delete(el);
@@ -264,8 +369,8 @@ export async function runInlineTranslate(
   options: OrchestrateOptions = {},
 ): Promise<void> {
   // One request at a time: a trigger while busy is dropped.
-  if (isTranslating) return;
-  const triggeredAt = Date.now();
+  if (isTranslating || isPrompting) return;
+  let triggeredAt = Date.now();
 
   let targetEl = options.element ?? null;
   if (!targetEl) {
@@ -296,7 +401,8 @@ export async function runInlineTranslate(
     }
   }
 
-  let rawText = getElementText(targetEl);
+  const isRetarget = options.sourceText != null;
+  let rawText = options.sourceText ?? getElementText(targetEl);
   if (!options.skipStripTrailing) {
     const tailMatched = passesTailGate(rawText, config.triggerKey, config.tapCount);
     rawText = removeTail(rawText, config.triggerKey, config.tapCount, { tailMatched }).text;
@@ -314,7 +420,7 @@ export async function runInlineTranslate(
     trailingKey: config.triggerKey,
   });
   const text = urlSafe.restore(prefixResult.body).trim();
-  const targetLanguageOverride = prefixResult.targetLang;
+  const targetLanguageOverride = options.targetLanguage ?? prefixResult.targetLang;
 
   if (!text) {
     console.debug('[AnyLLMTranslate:inline] gesture ignored - empty text');
@@ -327,7 +433,7 @@ export async function runInlineTranslate(
   // If the user deleted/typed new content, re-trigger translates that content.
   // Compare against full stripped raw (before prefix strip) and against body
   // so dual-mode / prefix edge cases still match when unedited.
-  if (config.enableFallbackUndo) {
+  if (config.enableFallbackUndo && !isRetarget) {
     const candidates = [rawText.trim(), text, getElementText(targetEl)];
     const unchanged = candidates.some((c) => shouldFallbackUndo(targetEl, c));
     if (unchanged) {
@@ -338,6 +444,13 @@ export async function runInlineTranslate(
     if (targetEl.getAttribute('data-anyllm-inline-translated') === '1') {
       clearInlineTranslateState(targetEl);
     }
+  }
+
+  if (!isRetarget) {
+    if (!(await promptBeforeTranslate(config, options, text.length))) return;
+    if (!targetEl.isConnected || isTranslating) return;
+    // Pacing (cancel window, min duration) starts once the user confirmed.
+    triggeredAt = Date.now();
   }
 
   console.debug('[AnyLLMTranslate:inline] starting translation', {
@@ -363,7 +476,9 @@ export async function runInlineTranslate(
   activeTriggeredAt = triggeredAt;
   activeCancelWindowMs = Math.max(0, config.cancelWindowMs ?? 0);
   isTranslating = true;
+  hideLanguageBar();
   addPulsingBorder(targetEl);
+  showLoadingOverlay(targetEl);
   // A fresh run supersedes any stale copy panel still floating near the field.
   removeCopyPanel();
   showToast(targetEl, 'Translating...', 'loading');
@@ -443,7 +558,9 @@ export async function runInlineTranslate(
       }
       const write = await writeSafeAsync(snapshotEl, out);
       if (write.success) {
-        undoMap.set(snapshotEl, { text: originalText, html: originalHtml });
+        // A retarget keeps the very first draft as the undo target.
+        const undoEntry = isRetarget ? undoMap.get(snapshotEl) : { text: originalText, html: originalHtml };
+        if (undoEntry) undoMap.set(snapshotEl, undoEntry);
         lastWrittenMap.set(snapshotEl, {
           text: out,
           at: Date.now(),
@@ -452,6 +569,9 @@ export async function runInlineTranslate(
         });
         snapshotEl.setAttribute('data-anyllm-inline-translated', '1');
         showToast(snapshotEl, 'Translated ✓', 'success');
+        if (config.enableTargetLanguageBar !== false) {
+          openLanguageBar(config, snapshotEl, targetLanguage, resolvedTarget.source);
+        }
       } else if (write.reason === 'framework-editor') {
         // The editor owns its DOM and exposes no usable API; writing would
         // corrupt or be reverted — hand the translation over for a real paste.
@@ -483,6 +603,7 @@ export async function runInlineTranslate(
       activeSnapshotText = null;
       activeElement = null;
       removePulsingBorder(snapshotEl);
+      hideLoadingOverlay();
       scheduleToastDismiss(2000);
     }
   }

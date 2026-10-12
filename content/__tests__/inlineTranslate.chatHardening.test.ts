@@ -55,6 +55,9 @@ const cfg = (over: Partial<InlineTranslateRuntimeConfig> = {}): InlineTranslateR
   triggerGapMs: 0,
   triggerToleranceCount: 0,
   minDurationMs: 0,
+  confirmLongText: false,
+  enableTargetLanguageBar: false,
+  inlineGuideShown: true,
   enableLanguagePrefix: true,
   languagePrefix: '/',
   dualMode: false,
@@ -76,7 +79,12 @@ beforeEach(() => {
   mockSendMessage.mockReset();
   document.body.innerHTML = '';
   // Legacy cases assert the write right after the response.
-  updateInlineTranslateConfig({ minDurationMs: 0 });
+  updateInlineTranslateConfig({
+    minDurationMs: 0,
+    confirmLongText: false,
+    enableTargetLanguageBar: false,
+    inlineGuideShown: true,
+  });
 });
 
 afterEach(() => {

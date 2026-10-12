@@ -168,3 +168,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: lint bans non-null assertions in source (not in tests); look parts up with optional chaining or a throwing helper.
 ---
+
+## [2026-10-12] - Phase 4 Task 6: Integrate overlay, bar and modals
+- **Implemented:** `OrchestrateOptions` gains `trigger` (`gesture`/`shortcut`/`retarget`), `sourceText`, `targetLanguage`, `onTurnOff`. Before capture (not on retarget): first-use guide on the first gesture (session flag + `inlineGuideShown`; Turn off → `onTurnOff` = `setInlineTranslateEnabled(false)`), then long-text confirm; pacing restarts after the prompts; triggers while a prompt is open are dropped. The overlay is shown with the pulse class and hidden on cancel/finally. After a write the language bar opens (when `enableTargetLanguageBar`): retarget runs the pipeline on the undoMap draft with the chosen language (wins over a prefix; tail stripped only when the draft passes the gate) and keeps the first draft as the undo target; Undo = `tryFallbackUndo`. Settings from in-page UI persist via `persistInlineSettings` (`loadSettings` + `updateSettings`, errors swallowed). index cleanup hides overlay/bar/modal.
+- **Files changed:** content/inlineTranslate/orchestrate.ts, content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.integration.test.ts (+ legacy cfg helpers pin `confirmLongText: false`, `enableTargetLanguageBar: false`, `inlineGuideShown: true`)
+- **Learnings:**
+  - Gotchas: a Space gesture fires `idleMs` (250) after the last tap, so the min-duration write lands at tap + 250 + 1500 ms. `persistInlineSettings` swallows the "no export on mock" error that suites mocking only `loadSettings` would throw.
+---
