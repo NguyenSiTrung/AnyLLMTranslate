@@ -278,6 +278,7 @@ export async function runInlineTranslate(
   const prefixResult = parseLanguagePrefix(urlSafe.text, {
     enabled: config.enableLanguagePrefix,
     prefixChar: config.languagePrefix,
+    trailingKey: config.triggerKey,
   });
   const text = urlSafe.restore(prefixResult.body).trim();
   const targetLanguageOverride = prefixResult.targetLang;

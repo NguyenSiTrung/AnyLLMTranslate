@@ -113,3 +113,11 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: streamStats/translate background tests mutate the stored settings object in place and reset the settings cache; a fire-and-forget migration `saveSettings` can race and overwrite it. Hypothesis recorded on `AnyLLMTranslate-slmv`.
 ---
+
+## [2026-10-12] - Phase 3 Task 1: Prefix parser upgrade
+- **Implemented:** `parseLanguagePrefix` accepts 1–2 starting chars from the starting-key alias class (`//en`, `、、英文`, `；ko`), `'none'` disables parsing, and a starting key equal to the trailing key is ignored (orchestrate passes `trailingKey`). Token resolution = explicit table (CJK names such as 英文/日文 added) over single-word English/native names from `LANGUAGES` plus validated bare codes; `resolveLanguageToken` (name→code) and `languagePrefixTokens` (code→names) exported.
+- **Files changed:** lib/inlineTranslatePrefix.ts, lib/inlineTriggerKeys.ts (moved from content/inlineTranslate/triggerKeys.ts, which now re-exports), content/inlineTranslate/orchestrate.ts, lib/__tests__/inlineTranslatePrefix.test.ts
+- **Learnings:**
+  - Patterns: the key alias table lives in `lib/inlineTriggerKeys.ts` so lib code (prefix parser) never imports from `content/`.
+  - Gotchas: 3+ starting chars are rejected (`///en` stays text); prefix-only gives an empty body, which orchestrate already treats as "nothing to translate".
+---

@@ -50,9 +50,9 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 <!-- execution: parallel -->
 <!-- depends: phase1 -->
 
-- [ ] Task 1: Prefix parser upgrade (FR-6)
+- [x] Task 1: Prefix parser upgrade (FR-6)
   <!-- files: lib/inlineTranslatePrefix.ts, lib/__tests__/inlineTranslatePrefix.test.ts -->
-  - [ ] Test: `//en hello`, `、、英文 hello`, `;;ja x`, `none` disables, prefix-only → no request, code↔name aliases both directions, starting key ≠ trailing key
+  - [x] Test: `//en hello`, `、、英文 hello`, `;;ja x`, `none` disables, prefix-only → no request, code↔name aliases both directions, starting key ≠ trailing key
 - [ ] Task 2: Auto target language detector (FR-7)
   <!-- files: content/inlineTranslate/autoLanguage.ts, content/__tests__/inlineTranslate.autoLanguage.test.ts -->
   - [ ] Test: `parentElementTo` first-match, plain selector all-matches, own injected nodes excluded, page fallback only when enabled, default otherwise; returns `{ lang, source: 'auto_selector' | 'auto_page' | 'default' }`
