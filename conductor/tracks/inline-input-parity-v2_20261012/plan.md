@@ -94,7 +94,7 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 2: Site Rules "Inline translate" disclosure (FR-8)
   <!-- files: entrypoints/options/sections/SiteRulesSection.tsx, entrypoints/options/sections/__tests__/siteRulesSection.test.tsx -->
   - [x] Test: selectors textarea + numeric overrides persist on the rule; empty fields remove the override key
-- [ ] Task: Conductor - Phase Verification 'Phase 5' (automated gates only)
+- [x] Task: Conductor - Phase Verification 'Phase 5' (automated gates only)
 
 ## Phase 6: Stats attribution, docs and close-out
 <!-- execution: sequential -->

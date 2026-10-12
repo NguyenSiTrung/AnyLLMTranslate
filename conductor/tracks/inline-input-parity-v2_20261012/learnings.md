@@ -193,3 +193,7 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: `handleSave` builds `cleanRule` field by field, so any new `SiteRule` field is silently dropped on save unless it is copied there (it now carries `inlineTranslate`).
 ---
+
+## [2026-10-12] - Phase 5 Verification
+- **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline), `pnpm test` 928/928 (133/133 files) — fully green run.
+---
