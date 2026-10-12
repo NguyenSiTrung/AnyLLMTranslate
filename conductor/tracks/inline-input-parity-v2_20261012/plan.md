@@ -29,10 +29,10 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 <!-- execution: sequential -->
 <!-- depends: phase1 -->
 
-- [ ] Task 1: Trigger-key alias module (FR-2)
+- [x] Task 1: Trigger-key alias module (FR-2)
   <!-- files: content/inlineTranslate/triggerKeys.ts, content/__tests__/inlineTranslate.triggerKeys.test.ts -->
-  - [ ] Test: `space` ≡ ' ', U+00A0, U+3000; `/`≡`、`, `.`≡`。`, `,`≡`，`, `;`≡`；`, `:`≡`：`; keydown `code === 'Space'` path
-  - [ ] `matchesTriggerChar`, `triggerCharClass`, `startingKeyAliases`
+  - [x] Test: `space` ≡ ' ', U+00A0, U+3000; `/`≡`、`, `.`≡`。`, `,`≡`，`, `;`≡`；`, `:`≡`：`; keydown `code === 'Space'` path
+  - [x] `matchesTriggerChar`, `triggerCharClass`, `startingKeyAliases`
 - [ ] Task 2: Tail gate + removeTail (FR-4, FR-5)
   <!-- files: content/inlineTranslate/tail.ts, content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.tail.test.ts -->
   - [ ] Test vectors: last-line rule, ≥ min(tapCount,2) consecutive, letter-after aborts, NBSP/U+3000 removal, maxDelete cap, `.`/`。` rule, URL placeholders round-trip

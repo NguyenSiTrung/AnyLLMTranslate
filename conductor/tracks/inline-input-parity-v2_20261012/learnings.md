@@ -76,3 +76,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: `content/__tests__/webTranslateLifecycle.test.ts` `vi.doMock('@/lib/siteRules')` with a fixed export list; the inline module resolves its config at import time, so a new `lib/siteRules` export it uses must be added to that mock or all 33 lifecycle cases fail on import.
 ---
+
+## [2026-10-12] - Phase 2 Task 1: Trigger-key alias module
+- **Implemented:** `triggerKeys.ts` — alias table (space ≡ NBSP ≡ U+3000; `/`↔`、`, `.`↔`。`, `,`↔`，`, `;`↔`；`, `:`↔`：`, `=`↔`＝`), `matchesTriggerChar`, `triggerCharClass`, `startingKeyAliases`, `isTriggerKeyEvent` (Space via `code`).
+- **Files changed:** content/inlineTranslate/triggerKeys.ts, content/__tests__/inlineTranslate.triggerKeys.test.ts
+- **Learnings:**
+  - Context: unknown keys (`Enter` in legacy tests) map to a one-element class, so the runtime still accepts arbitrary keys on the non-space branch.
+---
