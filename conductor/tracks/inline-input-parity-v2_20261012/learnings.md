@@ -107,3 +107,9 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Patterns: `setInlineTranslateEnabled` must derive the gesture flag through `gestureConfigFrom`, or re-enabling the feature silently re-arms taps in shortcut-only mode.
 ---
+
+## [2026-10-12] - Phase 2 Verification
+- **Gates:** `pnpm compile` 0, `pnpm lint` 37 (baseline). `pnpm test`: 863/864, 124/125 files across three full runs; the single red is `background.streamStats.test.ts` (known flake `AnyLLMTranslate-slmv`), isolated 3/3 green. A full run at the pre-track base `8eccb2f` and at the Phase 1 checkpoint also went red on streamStats (moving case), so this is not a branch regression. No fully green repeat run was obtained.
+- **Learnings:**
+  - Gotchas: streamStats/translate background tests mutate the stored settings object in place and reset the settings cache; a fire-and-forget migration `saveSettings` can race and overwrite it. Hypothesis recorded on `AnyLLMTranslate-slmv`.
+---

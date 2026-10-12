@@ -44,7 +44,7 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
 - [x] Task 4: Gesture-off (shortcut-only) mode (FR-3)
   <!-- files: content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts -->
   - [x] Test: `gestureEnabled: false` → taps never fire; `translateFocusedInput()` still translates; `enabled: false` blocks both
-- [ ] Task: Conductor - Phase Verification 'Phase 2' (automated gates only)
+- [x] Task: Conductor - Phase Verification 'Phase 2' (automated gates only)
 
 ## Phase 3: Language resolution (pure modules)
 <!-- execution: parallel -->
