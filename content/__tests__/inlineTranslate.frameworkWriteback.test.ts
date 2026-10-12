@@ -36,7 +36,6 @@ const cfg = (over: Partial<InlineTranslateRuntimeConfig> = {}): InlineTranslateR
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  timeWindowMs: 500,
   targetLanguage: 'en',
   idleMs: 0,
   triggerGapMs: 0,

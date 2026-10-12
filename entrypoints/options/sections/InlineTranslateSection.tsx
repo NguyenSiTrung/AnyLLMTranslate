@@ -138,7 +138,6 @@ export function InlineTranslateSection() {
               enableLanguagePrefix={inlineTranslate.enableLanguagePrefix ?? true}
               languagePrefix={inlineTranslate.languagePrefix ?? '/'}
               tapCount={inlineTranslate.tapCount}
-              timeWindowMs={inlineTranslate.timeWindowMs}
               triggerKeyLabel={gestureLabel}
             />
           </Card>
@@ -162,7 +161,7 @@ export function InlineTranslateSection() {
                     </kbd>
                   </div>
                   <span className="text-xs text-zinc-500">
-                    within {inlineTranslate.timeWindowMs}ms
+                    taps ≤ {inlineTranslate.triggerGapMs}ms apart
                   </span>
                   <div className="flex items-center gap-1.5 ml-auto">
                     <span className="text-xs text-zinc-400">Shortcut:</span>
@@ -206,16 +205,16 @@ export function InlineTranslateSection() {
                 </FieldGroup>
 
                 <FieldGroup
-                  label="Time Window"
-                  description={`Maximum span for the gesture burst (${inlineTranslate.timeWindowMs}ms)`}
+                  label="Tap Gap"
+                  description={`Maximum pause between Space taps (${inlineTranslate.triggerGapMs}ms)`}
                 >
                   <Slider
-                    id="inline-translate-time-window"
-                    min={200}
-                    max={2000}
+                    id="inline-translate-tap-gap"
+                    min={100}
+                    max={1000}
                     step={50}
-                    value={inlineTranslate.timeWindowMs}
-                    onChange={(timeWindowMs) => patch({ timeWindowMs })}
+                    value={inlineTranslate.triggerGapMs}
+                    onChange={(triggerGapMs) => patch({ triggerGapMs })}
                     disabled={!enabled}
                   />
                 </FieldGroup>

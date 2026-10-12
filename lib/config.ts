@@ -161,29 +161,6 @@ function migrateSafeKeyThrottleDefaults(merged: ExtensionSettings): void {
 }
 
 /**
- * One-time upgrade: installs that saved settings while the inline gesture
- * window default was 500/1000ms keep that tight value forever — stored values
- * win the deep merge — which forces an uncomfortably fast Space×N burst
- * (per-gap ≈ window/(tapCount−1): 500ms meant ~250ms/gap). Bump only the
- * fingerprints of the old defaults to the current default; deliberately tuned
- * windows (e.g. 700ms, 2000ms) are left alone. Gated by
- * `inlineGestureWindowMigrated` so a user who later re-tightens the window is
- * not reset on every load.
- *
- * Returns true when the flag transitioned false→true (caller persists).
- */
-function migrateInlineGestureWindowDefaults(merged: ExtensionSettings): boolean {
-  if (merged.inlineGestureWindowMigrated) return false;
-  merged.inlineGestureWindowMigrated = true;
-
-  const windowMs = merged.inlineTranslate?.timeWindowMs;
-  if (windowMs === 500 || windowMs === 1000) {
-    merged.inlineTranslate.timeWindowMs = DEFAULT_INLINE_TRANSLATE_SETTINGS.timeWindowMs;
-  }
-  return true;
-}
-
-/**
  * Combo interval for non-space trailing keys: values below 100 ms are treated
  * as unset (refer ignores them) and fall back to the default; the rest are
  * clamped to the supported 150–1000 ms range.
@@ -331,8 +308,6 @@ export async function loadSettings(): Promise<ExtensionSettings> {
         ...DEFAULT_SETTINGS,
         // Defaults already use safe key throttle — mark migration done.
         safeKeyThrottleMigrated: true,
-        // Defaults already use the comfortable gesture window — mark done.
-        inlineGestureWindowMigrated: true,
         inlineParityV2Migrated: true,
         siteRules: BUILT_IN_RULES.map((r) => ({ ...r })),
       };
@@ -388,12 +363,11 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     const needsThrottlePersist = !merged.safeKeyThrottleMigrated;
     migrateSafeKeyThrottleDefaults(merged);
 
-    // Upgrade tight legacy inline gesture windows (500/1000ms) once per install.
-    const needsGestureWindowPersist = migrateInlineGestureWindowDefaults(merged);
-
     // Move old inline gesture defaults to the refer-parity FSM values once.
     const needsInlineParityPersist = migrateInlineParityV2(merged);
     if (merged.inlineTranslate) {
+      // `timeWindowMs` was replaced by the two-branch FSM; drop stored copies.
+      delete (merged.inlineTranslate as unknown as Record<string, unknown>).timeWindowMs;
       merged.inlineTranslate.triggerTimeoutMs = normalizeInlineTriggerTimeoutMs(
         merged.inlineTranslate.triggerTimeoutMs,
       );
@@ -412,9 +386,9 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     }
 
     // Persist one-time migrations so the flags stick and later intentional
-    // choices (throttle "unlimited" 0s, a re-tightened gesture window) are not
+    // choices (throttle "unlimited" 0s, a retuned inline gesture) are not
     // re-upgraded on every load.
-    if (needsThrottlePersist || needsGestureWindowPersist || needsInlineParityPersist) {
+    if (needsThrottlePersist || needsInlineParityPersist) {
       void saveSettings(merged).catch(() => {
         /* best-effort; next load will re-attempt migration */
       });

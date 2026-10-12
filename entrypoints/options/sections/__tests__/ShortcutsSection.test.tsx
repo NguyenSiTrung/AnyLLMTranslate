@@ -60,7 +60,6 @@ describe('ShortcutsSection', () => {
       inlineTranslate: {
         ...DEFAULT_SETTINGS.inlineTranslate,
         tapCount: 3,
-        timeWindowMs: 800,
       },
     });
     mockGetAll.mockClear();
@@ -102,7 +101,6 @@ describe('ShortcutsSection', () => {
       inlineTranslate: {
         ...DEFAULT_SETTINGS.inlineTranslate,
         tapCount: 3,
-        timeWindowMs: 800,
       },
     });
     {

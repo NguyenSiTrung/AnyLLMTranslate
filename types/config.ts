@@ -635,8 +635,6 @@ export interface InlineTranslateSettings {
   triggerKey: InlineTriggerKey;
   /** Number of consecutive key presses required (2–5, default: 3) */
   tapCount: number;
-  /** Time window in ms for consecutive presses (200–2000, default: 1500) */
-  timeWindowMs: number;
   /** Target language for inline translation (ISO 639-1 code) */
   targetLanguage: string;
   /**
@@ -788,16 +786,6 @@ export interface ExtensionSettings {
    */
   safeKeyThrottleMigrated?: boolean;
   /**
-   * One-time migration flag: installs that saved settings while the inline
-   * gesture window default was 500/1000ms were upgraded to the current
-   * {@link DEFAULT_INLINE_TRANSLATE_SETTINGS} window (stored values win the
-   * deep merge, so the tight default would otherwise stick forever). Once
-   * true, loadSettings will not re-apply that upgrade, so users may re-tighten
-   * the window without being reset. New installs start as true (defaults
-   * already comfortable).
-   */
-  inlineGestureWindowMigrated?: boolean;
-  /**
    * One-time migration flag for inline parity v2: stored inline gesture values
    * still on the old defaults (idle 0 / gap 0 / tolerance 0) take the refer
    * defaults, `triggerKey` is constrained to {@link INLINE_TRIGGER_KEYS}, and
@@ -924,14 +912,6 @@ export const DEFAULT_INLINE_TRANSLATE_SETTINGS: InlineTranslateSettings = {
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  /**
-   * 1500ms total span for the burst. The window is a shared first→last-press
-   * budget (per-gap ≈ window/(tapCount−1)), so 500ms felt like hammering and
-   * 1000ms still forced a rushed 500ms/gap average for deliberate Space×3.
-   * 1500ms gives ~750ms/gap — comfortable without making stray double-spaces
-   * combine into accidental triggers (any non-trigger key resets the burst).
-   */
-  timeWindowMs: 1500,
   targetLanguage: 'en',
   /** Refer parity: Space taps ≤ 250 ms apart, fire 250 ms after the last tap. */
   idleMs: 250,
@@ -1083,12 +1063,6 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
    * loadSettings when no stored settings exist (defaults already safe).
    */
   safeKeyThrottleMigrated: false,
-  /**
-   * False so existing installs (merged from storage without this field) still
-   * run the one-time 500/1000ms → current-default gesture-window upgrade.
-   * Fresh installs set true in loadSettings when no stored settings exist.
-   */
-  inlineGestureWindowMigrated: false,
   /** False so existing installs run the one-time inline parity v2 upgrade. */
   inlineParityV2Migrated: false,
   /**

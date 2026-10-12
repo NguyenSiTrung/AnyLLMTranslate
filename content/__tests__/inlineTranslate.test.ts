@@ -51,7 +51,11 @@ beforeEach(() => {
     enabled: true,
     triggerKey: ' ',
     tapCount: 3,
-    timeWindowMs: 500,
+    // Pipeline-focused suites fire on the next tick; FSM timing lives in the parity truth table.
+    idleMs: 0,
+    triggerGapMs: 250,
+    triggerToleranceCount: 0,
+    minDurationMs: 0,
   });
 
   mockSendMessage.mockReset();
@@ -188,11 +192,12 @@ describe('configuration', () => {
       enabled: true,
       triggerKey: ' ',
       tapCount: 3,
-      timeWindowMs: 500,
+      idleMs: 0,
     });
 
-    updateInlineTranslateConfig({ tapCount: 4, timeWindowMs: 300 });
-    expect(getInlineTranslateConfig()).toMatchObject({ tapCount: 4, timeWindowMs: 300 });
+    updateInlineTranslateConfig({ tapCount: 4, idleMs: 300 });
+    expect(getInlineTranslateConfig()).toMatchObject({ tapCount: 4, idleMs: 300 });
+    expect(getInlineTranslateConfig()).not.toHaveProperty('timeWindowMs');
 
     setInlineTranslateEnabled(false);
     expect(getInlineTranslateConfig().enabled).toBe(false);
@@ -322,7 +327,7 @@ describe('gesture detection', () => {
     // facet: non-editable, password, code-editor, empty, and disabled fields are ignored;
     // window+document keydown is deduped; empty fields never count taps.
     // (Reset the config/mocks the previous facet mutated, mirroring a fresh beforeEach.)
-    updateInlineTranslateConfig({ triggerKey: ' ', tapCount: 3, timeWindowMs: 500 });
+    updateInlineTranslateConfig({ triggerKey: ' ', tapCount: 3, idleMs: 0 });
     mockSendMessage.mockClear();
     removeToast();
 

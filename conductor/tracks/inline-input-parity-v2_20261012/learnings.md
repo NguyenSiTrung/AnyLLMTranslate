@@ -91,3 +91,12 @@ From `conductor/patterns.md` (inline-translate sections):
   - Gotchas: writing ` ` / `　` through a shell heredoc can land as the literal characters; ESLint `no-irregular-whitespace` then flags regex literals (strings are skipped, so it hides in string tables). Grep for the raw bytes or write escapes from Python.
   - Patterns: the period rule is skipped when `.` is itself the trigger key, otherwise `.`-key bursts would eat a real sentence end.
 ---
+
+## [2026-10-12] - Phase 2 Task 3: Two-branch gesture FSM; timeWindowMs removed
+- **Implemented:** `gesture.ts` rewritten — Space branch (gap/idle/tolerance, evaluate on idle), non-space branch (combo timeout, fire on next task so the key's char is in the field); tail gate callback evaluated at fire time; modifier keys ignored; any other key cancels a pending evaluation. `timeWindowMs` + `inlineGestureWindowMigrated` + `migrateInlineGestureWindowDefaults` deleted; `loadSettings` drops stored `timeWindowMs`. Options: Time Window slider → Tap Gap slider; `buildGestureRow(tapCount, triggerKey)`.
+- **Files changed:** content/inlineTranslate/{gesture,index,types}.ts, types/config.ts, lib/config.ts, lib/shortcutDisplay.ts, entrypoints/options/{sections/ShortcutsSection,sections/InlineTranslateSection,components/InlineTranslatePreview}.tsx, tests (parity truth table, settings, ShortcutsSection, chatHardening, inlineTranslate).
+- **Learnings:**
+  - Gotchas: a keydown fires *before* its character lands. A tail gate or text read at keydown time never sees the current tap — evaluate on the idle timer (Space) or `setTimeout(0)` (other keys), else the Nth char's own `input` event also reads as "user typed during the request".
+  - Gotchas: Shift (for `:`) is a non-trigger keydown; without a modifier skip-list it resets every burst on shifted trigger keys.
+  - Patterns: pipeline-focused suites pin `idleMs: 0`; suites asserting real defaults advance the fake clock past the 250 ms idle window instead.
+---

@@ -18,7 +18,6 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
       enabled: true,
       triggerKey: ' ',
       tapCount: 3,
-      timeWindowMs: 1500,
       idleMs: 250,
       enableLanguagePrefix: true,
       languagePrefix: '/',
@@ -137,53 +136,6 @@ describe('InlineTranslate settings, prefix & preview helpers', () => {
   });
 });
 
-describe('inline gesture window migration', () => {
-  function mockStored(stored: Record<string, unknown>) {
-    const get = vi.fn().mockResolvedValue({ 'anyllm-translate-settings': stored });
-    const set = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(globalThis, 'chrome', {
-      value: {
-        storage: {
-          local: { get, set },
-          session: { get: vi.fn(), set: vi.fn() },
-        },
-        runtime: { id: 'test-ext' },
-      },
-      writable: true,
-      configurable: true,
-    });
-    return { set };
-  }
-
-  it('upgrades stuck 500/1000ms defaults to the current default once and leaves tuned windows alone', async () => {
-    // 500ms (first default) and 1000ms (second default) are fingerprints of
-    // "saved settings, never customized" — stored values win the deep merge,
-    // so without this upgrade those installs keep the too-fast burst forever.
-    for (const legacy of [500, 1000]) {
-      const { set } = mockStored({ inlineTranslate: { timeWindowMs: legacy } });
-      const settings = await loadSettings();
-      expect(settings.inlineTranslate.timeWindowMs).toBe(
-        DEFAULT_INLINE_TRANSLATE_SETTINGS.timeWindowMs,
-      );
-      expect(settings.inlineGestureWindowMigrated).toBe(true);
-      // Flag transition is persisted so the upgrade runs only once.
-      await vi.waitFor(() => expect(set).toHaveBeenCalled());
-    }
-
-    // A deliberately tuned window is never touched (and the flag still sticks).
-    mockStored({ inlineTranslate: { timeWindowMs: 700 } });
-    expect((await loadSettings()).inlineTranslate.timeWindowMs).toBe(700);
-
-    // Once migrated, even a fingerprint value is left alone — the user
-    // re-tightened the window and must not be reset on every load.
-    mockStored({
-      inlineTranslate: { timeWindowMs: 500 },
-      inlineGestureWindowMigrated: true,
-    });
-    expect((await loadSettings()).inlineTranslate.timeWindowMs).toBe(500);
-  });
-});
-
 describe('inline parity v2 migration', () => {
   function mockStored(stored: Record<string, unknown>) {
     const get = vi.fn().mockResolvedValue({ 'anyllm-translate-settings': stored });
@@ -204,7 +156,6 @@ describe('inline parity v2 migration', () => {
 
   it('moves old-default fingerprints (idle/gap/tolerance 0) to refer defaults once and persists the flag', async () => {
     const { set } = mockStored({
-      inlineGestureWindowMigrated: true,
       inlineTranslate: { idleMs: 0, triggerGapMs: 0, triggerToleranceCount: 0, tapCount: 4 },
     });
 
@@ -222,7 +173,6 @@ describe('inline parity v2 migration', () => {
 
   it('keeps customized values and constrains triggerKey to the supported set', async () => {
     mockStored({
-      inlineGestureWindowMigrated: true,
       inlineTranslate: { idleMs: 400, triggerGapMs: 300, triggerToleranceCount: 1, triggerKey: 'Space' },
     });
     const custom = await loadSettings();
@@ -233,17 +183,21 @@ describe('inline parity v2 migration', () => {
       triggerKey: ' ',
     });
 
-    mockStored({ inlineGestureWindowMigrated: true, inlineTranslate: { triggerKey: 'x' } });
+    mockStored({ inlineTranslate: { triggerKey: 'x' } });
     expect((await loadSettings()).inlineTranslate.triggerKey).toBe(' ');
 
-    mockStored({ inlineGestureWindowMigrated: true, inlineTranslate: { triggerKey: '/' } });
+    mockStored({ inlineTranslate: { triggerKey: '/' } });
     expect((await loadSettings()).inlineTranslate.triggerKey).toBe('/');
+  });
+
+  it('drops the retired timeWindowMs from stored settings', async () => {
+    mockStored({ inlineParityV2Migrated: true, inlineTranslate: { timeWindowMs: 1000 } });
+    expect((await loadSettings()).inlineTranslate).not.toHaveProperty('timeWindowMs');
   });
 
   it('does not re-run once the flag is set', async () => {
     const { set } = mockStored({
       safeKeyThrottleMigrated: true,
-      inlineGestureWindowMigrated: true,
       inlineParityV2Migrated: true,
       inlineTranslate: { idleMs: 0, triggerGapMs: 0, triggerToleranceCount: 0 },
     });
@@ -265,7 +219,6 @@ describe('inline parity v2 migration', () => {
     expect(normalizeInlineTriggerTimeoutMs(5000)).toBe(1000);
 
     mockStored({
-      inlineGestureWindowMigrated: true,
       inlineParityV2Migrated: true,
       inlineTranslate: { triggerTimeoutMs: 50 },
     });
@@ -380,9 +333,10 @@ describe('shortcutDisplay', () => {
     expect(parseShortcutKeys('Space × 3')).toEqual(['Space × 3']);
     expect(parseShortcutKeys('MediaNextTrack')).toEqual(['MediaNextTrack']);
     expect(formatGestureLabel(3)).toBe('Space × 3');
-    const row = buildGestureRow(3, 800);
+    expect(formatGestureLabel(3, '/')).toBe('/ × 3');
+    const row = buildGestureRow(3);
     expect(row).toMatchObject({ scope: 'gesture', shortcut: 'Space × 3', keyLabel: 'Space × 3' });
-    expect(row.description).toMatch(/800/);
+    expect(buildGestureRow(2, ';').shortcut).toBe('; × 2');
 
     const rows = buildGlobalRows([
       { name: 'translate-page', shortcut: 'Alt+B', description: 'ignored if meta exists' },
@@ -409,7 +363,7 @@ describe('shortcutDisplay', () => {
     expect(PAGE_SHORTCUT_ROWS.every((r) => r.scope === 'page')).toBe(true);
 
     // Counts bound globals, filters, groups scopes, and formats cheatsheet
-    const sample = [...buildGlobalRows([]), ...PAGE_SHORTCUT_ROWS, buildGestureRow(3, 800)];
+    const sample = [...buildGlobalRows([]), ...PAGE_SHORTCUT_ROWS, buildGestureRow(3)];
 
     const boundRows = buildGlobalRows([
       { name: 'translate-page', shortcut: 'Alt+A' },
@@ -442,7 +396,7 @@ describe('shortcutDisplay', () => {
     const g = groupRowsByScope([
       ...buildGlobalRows([]).slice(0, 1),
       PAGE_SHORTCUT_ROWS[0]!,
-      buildGestureRow(2, 500),
+      buildGestureRow(2),
     ]);
     expect(g.global).toHaveLength(1);
     expect(g.page).toHaveLength(1);

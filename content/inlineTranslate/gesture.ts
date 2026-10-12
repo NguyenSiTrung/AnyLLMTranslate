@@ -1,24 +1,39 @@
 /**
- * IME-safe gesture detection for trailing trigger keys (e.g. triple-space).
+ * IME-safe gesture detection for trailing trigger keys (refer `Pqe`).
  *
- * Dual path:
- *  - keydown (primary) for physical presses
- *  - input insertText (fallback) when sites/IMEs swallow or omit keydown
- * Deduped so the same physical press never counts twice.
+ * Two branches:
+ *  - Space: taps ≤ `triggerGapMs` apart extend the burst; every tap re-arms an
+ *    idle timer, and when it fires the burst counts only if
+ *    `tapCount ≤ count ≤ tapCount + triggerToleranceCount` (6+ fast taps never
+ *    fire, so holding/hammering Space does not translate).
+ *  - Other keys: taps further apart than `triggerTimeoutMs` restart the count;
+ *    the burst fires as soon as `count ≥ tapCount` (after the key's own
+ *    character has landed in the field).
+ *
+ * Dual path: keydown (primary) for physical presses, input insertText
+ * (fallback) when sites/IMEs swallow or omit keydown — deduped so one physical
+ * press never counts twice.
  */
+
+import { DEFAULT_INLINE_TRANSLATE_SETTINGS } from '@/types/config';
+import { isSpaceTriggerKey, isTriggerKeyEvent, matchesTriggerChar } from './triggerKeys';
 
 export interface GestureConfig {
   enabled: boolean;
   triggerKey: string;
   tapCount: number;
-  timeWindowMs: number;
+  /** Space: quiet time after the last tap before the burst is evaluated. */
   idleMs: number;
+  /** Space: maximum gap between taps of one burst. */
   triggerGapMs: number;
+  /** Space: extra taps above tapCount that still fire. */
   triggerToleranceCount: number;
+  /** Other keys: taps further apart than this restart the count. */
+  triggerTimeoutMs: number;
 }
 
 export interface GestureCallbacks {
-  /** Called when gesture fires (after optional idle debounce) */
+  /** Called when the gesture fires */
   onTrigger: (target: HTMLElement) => void;
   /** Guard: is this element allowed? */
   shouldAccept: (el: Element | null) => el is HTMLElement;
@@ -26,6 +41,11 @@ export interface GestureCallbacks {
   isCaretAtEnd?: (el: HTMLElement) => boolean;
   /** Optional: get field text to skip empty */
   getText?: (el: HTMLElement) => string;
+  /**
+   * Optional: tail gate evaluated at fire time, once the burst's characters
+   * are in the field (letter-after-taps, burst actually at the end).
+   */
+  passesTailGate?: (el: HTMLElement) => boolean;
   /**
    * Optional: deepest event target. `event.target` is retargeted to the shadow
    * host when the event crosses a shadow boundary, which hides web-component
@@ -47,32 +67,43 @@ export interface GestureController {
   /** Update config */
   setConfig: (partial: Partial<GestureConfig>) => void;
   getConfig: () => GestureConfig;
-  /** Test: current tap timestamps */
-  getTimestamps: () => number[];
+  /** Test: taps counted in the current burst */
+  getCount: () => number;
   dispose: () => void;
 }
 
-/**
- * Match the configured trigger key against a KeyboardEvent.
- * Space is special-cased: many IME/OS layouts report a non-space `event.key`
- * while `event.code` remains `"Space"`. Accept either so Space×N stays reliable.
- */
+/** Modifier presses (e.g. Shift for `:`) neither count nor break a burst. */
+const MODIFIER_KEYS = new Set([
+  'Shift',
+  'Control',
+  'Alt',
+  'AltGraph',
+  'Meta',
+  'CapsLock',
+  'Fn',
+  'OS',
+  'Super',
+  'Hyper',
+]);
+
+/** Match the configured trigger key (and its aliases) against a KeyboardEvent. */
 export function isTriggerKey(event: KeyboardEvent, triggerKey: string): boolean {
-  if (event.key === triggerKey) return true;
-  if (triggerKey === ' ' || triggerKey === 'Space') {
-    return event.code === 'Space' || event.key === 'Spacebar' || event.key === 'Space';
-  }
-  return false;
+  return isTriggerKeyEvent(event, triggerKey);
 }
 
 /** Whether inserted text from an InputEvent matches the trigger key. */
 export function isTriggerInsertData(data: string | null, triggerKey: string): boolean {
   if (data == null || data.length === 0) return false;
-  if (triggerKey === ' ' || triggerKey === 'Space') {
-    // Single space, or NBSP which some editors insert for trailing spaces
-    return data === ' ' || data === '\u00a0';
-  }
-  return data === triggerKey;
+  return matchesTriggerChar(data, triggerKey);
+}
+
+function isTestEnv(): boolean {
+  // Use process.env only (no import.meta): content scripts are bundled as IIFE.
+  return (
+    typeof process !== 'undefined' &&
+    typeof process.env === 'object' &&
+    process.env.VITEST === 'true'
+  );
 }
 
 /**
@@ -83,12 +114,11 @@ export function createGestureController(
   callbacks: GestureCallbacks,
 ): GestureController {
   let config: GestureConfig = { ...initial };
-  let keyTimestamps: number[] = [];
+  let count = 0;
+  let lastTapAt = 0;
   let composing = false;
-  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   let pendingTarget: HTMLElement | null = null;
-  /** Bumped to cancel a scheduled fire without racing element identity. */
-  let fireToken = 0;
   const processedEvents = new WeakSet<Event>();
   /**
    * After a keydown counts a trigger, suppress the matching input insertText
@@ -98,71 +128,77 @@ export function createGestureController(
 
   const now = () => (callbacks.now ? callbacks.now() : Date.now());
 
-  function clearIdle(): void {
-    if (idleTimer != null) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
+  const gapMs = () =>
+    config.triggerGapMs > 0 ? config.triggerGapMs : DEFAULT_INLINE_TRANSLATE_SETTINGS.triggerGapMs;
+  const timeoutMs = () =>
+    config.triggerTimeoutMs >= 100
+      ? config.triggerTimeoutMs
+      : DEFAULT_INLINE_TRANSLATE_SETTINGS.triggerTimeoutMs;
+
+  function clearTimer(): void {
+    if (timer != null) {
+      clearTimeout(timer);
+      timer = null;
     }
-    pendingTarget = null;
-    fireToken += 1;
   }
 
-  function resetTaps(): void {
-    keyTimestamps = [];
-  }
-
+  /** Reset counters and drop any scheduled evaluation. */
   function reset(): void {
-    resetTaps();
-    clearIdle();
+    count = 0;
+    lastTapAt = 0;
+    pendingTarget = null;
+    clearTimer();
   }
 
-  function fire(target: HTMLElement): void {
-    // Invalidate any other scheduled fires, then trigger once.
-    if (idleTimer != null) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
-    }
-    pendingTarget = null;
-    fireToken += 1;
-    keyTimestamps = [];
+  function fireIfGatePasses(target: HTMLElement): void {
+    if (callbacks.passesTailGate && !callbacks.passesTailGate(target)) return;
     keydownCountUntil = 0;
     callbacks.onTrigger(target);
   }
 
-  function scheduleFire(target: HTMLElement): void {
-    if (idleTimer != null) {
-      clearTimeout(idleTimer);
-      idleTimer = null;
-    }
-    pendingTarget = target;
-    const token = ++fireToken;
-    const idle = config.idleMs > 0 ? config.idleMs : 0;
-    const delay = idle <= 0 ? 0 : idle;
-    idleTimer = setTimeout(() => {
-      idleTimer = null;
-      // Only fire if this schedule is still current
-      if (token === fireToken && pendingTarget === target) {
-        fire(target);
-      }
-    }, delay);
+  /** Space branch: idle timer expired — evaluate the burst. */
+  function evaluateSpaceBurst(): void {
+    timer = null;
+    const target = pendingTarget;
+    const taps = count;
+    count = 0;
+    lastTapAt = 0;
+    pendingTarget = null;
+    if (!target) return;
+    const max = config.tapCount + Math.max(0, config.triggerToleranceCount);
+    if (taps >= config.tapCount && taps <= max) fireIfGatePasses(target);
   }
 
   function acceptTap(target: HTMLElement): void {
     const t = now();
 
-    keyTimestamps.push(t);
-    keyTimestamps = keyTimestamps.filter((ts) => t - ts <= config.timeWindowMs);
-
-    if (
-      config.triggerToleranceCount > 0 &&
-      keyTimestamps.length > config.tapCount + config.triggerToleranceCount
-    ) {
-      keyTimestamps = keyTimestamps.slice(-config.tapCount);
+    if (isSpaceTriggerKey(config.triggerKey)) {
+      count = count > 0 && t - lastTapAt <= gapMs() ? count + 1 : 1;
+      lastTapAt = t;
+      pendingTarget = target;
+      clearTimer();
+      timer = setTimeout(evaluateSpaceBurst, Math.max(0, config.idleMs));
+      return;
     }
 
-    if (keyTimestamps.length >= config.tapCount) {
-      scheduleFire(target);
-    }
+    if (count > 0 && t - lastTapAt > timeoutMs()) count = 0;
+    count += 1;
+    lastTapAt = t;
+    if (count < config.tapCount) return;
+
+    // Fire on the next task so the key's own character is already in the
+    // field (the gate and removeTail read it, and its input event must not
+    // look like user typing during the request).
+    count = 0;
+    lastTapAt = 0;
+    pendingTarget = target;
+    clearTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      const pending = pendingTarget;
+      pendingTarget = null;
+      if (pending) fireIfGatePasses(pending);
+    }, 0);
   }
 
   /** Deepest target for an event (shadow-aware when the caller provides it). */
@@ -189,14 +225,14 @@ export function createGestureController(
 
     if (callbacks.isCaretAtEnd && !callbacks.isCaretAtEnd(target)) {
       // Mid-string — do not count; reset burst so partial progress does not leak
-      resetTaps();
+      reset();
       return null;
     }
 
     if (callbacks.getText) {
       const text = callbacks.getText(target);
       // Skip truly empty before any trigger landed (avoid blank-field spam)
-      if (!text.trim() && keyTimestamps.length === 0) {
+      if (!text.trim() && count === 0) {
         return null;
       }
     }
@@ -218,12 +254,7 @@ export function createGestureController(
 
     // P0: ignore untrusted, composing, and key-repeat.
     // jsdom KeyboardEvents are never trusted — allow them only under Vitest.
-    // Use process.env only (no import.meta): content scripts are bundled as IIFE.
-    const isTestEnv =
-      typeof process !== 'undefined' &&
-      typeof process.env === 'object' &&
-      process.env.VITEST === 'true';
-    if (!event.isTrusted && !isTestEnv) return;
+    if (!event.isTrusted && !isTestEnv()) return;
 
     // During IME composition: ignore this keydown but do NOT reset taps.
     // Resetting here caused Space×(N+1): the word-commit Space or a mid-burst
@@ -232,11 +263,12 @@ export function createGestureController(
       return;
     }
     if (event.repeat) return;
+    if (MODIFIER_KEYS.has(event.key)) return;
 
     if (!isTriggerKey(event, config.triggerKey)) {
-      // Non-trigger key resets gesture progress (user continued typing)
-      // but does not cancel a pending fire already scheduled.
-      resetTaps();
+      // Any other key means the user kept typing: drop the burst and any
+      // pending evaluation (a letter after the taps never translates).
+      reset();
       return;
     }
 
@@ -244,17 +276,16 @@ export function createGestureController(
     if (!target) return;
 
     // Suppress the following input insertText for this physical press.
-    // Use a slightly wider window — some editors deliver input on the next
-    // task after keydown (ProseMirror/React), which exceeded 50ms and
-    // double-counted, but more often the commit path lost a tap instead.
+    // Some editors deliver input on the next task after keydown
+    // (ProseMirror/React), so the window is wider than one tick.
     keydownCountUntil = now() + 100;
     acceptTap(target);
   }
 
   function onCompositionStart(_event: Event): void {
     composing = true;
-    // Real IME character composition — cancel an in-progress space burst.
-    resetTaps();
+    // Real IME character composition — cancel an in-progress burst.
+    reset();
   }
 
   function onCompositionEnd(_event: Event): void {
@@ -277,7 +308,7 @@ export function createGestureController(
       inputType === 'historyUndo' ||
       inputType === 'historyRedo'
     ) {
-      resetTaps();
+      reset();
       return;
     }
 
@@ -285,7 +316,6 @@ export function createGestureController(
     if (composing) return;
 
     // Dual path: count trigger inserts when keydown was swallowed / missing.
-    // insertText with space data, or insertCompositionText that ends with space.
     const isInsert =
       inputType === 'insertText' ||
       inputType === 'insertCompositionText' ||
@@ -298,11 +328,7 @@ export function createGestureController(
     if (now() < keydownCountUntil) return;
 
     // Untrusted synthetic inputs (our own write-back) — skip outside tests
-    const isTestEnv =
-      typeof process !== 'undefined' &&
-      typeof process.env === 'object' &&
-      process.env.VITEST === 'true';
-    if (!event.isTrusted && !isTestEnv) return;
+    if (!event.isTrusted && !isTestEnv()) return;
 
     const target = resolveCountTarget(eventTarget(event));
     if (!target) return;
@@ -321,7 +347,7 @@ export function createGestureController(
       reset();
     },
     getConfig: () => ({ ...config }),
-    getTimestamps: () => [...keyTimestamps],
+    getCount: () => count,
     dispose() {
       reset();
     },

@@ -13,7 +13,6 @@ export interface InlineTranslatePreviewProps {
   enableLanguagePrefix: boolean;
   languagePrefix: string;
   tapCount: number;
-  timeWindowMs: number;
   triggerKeyLabel: string;
 }
 
@@ -23,7 +22,6 @@ export function InlineTranslatePreview({
   dualMode,
   enableLanguagePrefix,
   languagePrefix,
-  timeWindowMs,
   triggerKeyLabel,
 }: InlineTranslatePreviewProps) {
   const projection = buildPreviewProjection({
@@ -86,7 +84,7 @@ export function InlineTranslatePreview({
         <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-300 font-mono">
           {triggerKeyLabel}
         </kbd>
-        <span className="text-[10px] text-zinc-500">within {timeWindowMs}ms</span>
+        <span className="text-[10px] text-zinc-500">at the end of the text, or</span>
         <kbd className="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] text-zinc-300 font-mono">
           Alt+I
         </kbd>

@@ -37,10 +37,10 @@ appended per task. Phase gate = `pnpm test`, `pnpm compile`, `pnpm lint`
   <!-- files: content/inlineTranslate/tail.ts, content/inlineTranslate/orchestrate.ts, content/__tests__/inlineTranslate.tail.test.ts -->
   - [x] Test vectors: last-line rule, ≥ min(tapCount,2) consecutive, letter-after aborts, NBSP/U+3000 removal, maxDelete cap, `.`/`。` rule, URL placeholders round-trip
   - [x] Replace `stripTrailingTrigger` in `orchestrate.ts` (delete old helper)
-- [ ] Task 3: Two-branch gesture FSM (FR-1); remove `timeWindowMs` everywhere
+- [x] Task 3: Two-branch gesture FSM (FR-1); remove `timeWindowMs` everywhere
   <!-- files: content/inlineTranslate/gesture.ts, content/inlineTranslate/index.ts, types/config.ts, lib/config.ts, entrypoints/options/sections/ShortcutsSection.tsx, entrypoints/options/sections/InlineTranslateSection.tsx, entrypoints/options/components/InlineTranslatePreview.tsx, lib/inlineTranslatePreview.ts, content/__tests__/inlineTranslate.parity.test.ts -->
-  - [ ] Test truth table (fake timers, injected `now`): Space gaps 200×3 fire, 400×3 none, 4–5 taps fire, 6 none, tail-gate failure resets, non-space `/`×3 within 200 ms fires immediately, gap > timeout resets, compositionstart/delete input reset; keydown+insertText dedupe preserved
-  - [ ] Drop `timeWindowMs` from type, defaults, migration (delete it from stored settings), UI and preview; retire `inlineGestureWindowMigrated` logic if fully superseded
+  - [x] Test truth table (fake timers, injected `now`): Space gaps 200×3 fire, 400×3 none, 4–5 taps fire, 6 none, tail-gate failure resets, non-space `/`×3 within 200 ms fires immediately, gap > timeout resets, compositionstart/delete input reset; keydown+insertText dedupe preserved
+  - [x] Drop `timeWindowMs` from type, defaults, migration (delete it from stored settings), UI and preview; retire `inlineGestureWindowMigrated` logic if fully superseded
 - [ ] Task 4: Gesture-off (shortcut-only) mode (FR-3)
   <!-- files: content/inlineTranslate/index.ts, content/__tests__/inlineTranslate.test.ts -->
   - [ ] Test: `gestureEnabled: false` → taps never fire; `translateFocusedInput()` still translates; `enabled: false` blocks both

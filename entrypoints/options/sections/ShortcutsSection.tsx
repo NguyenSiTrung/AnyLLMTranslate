@@ -57,7 +57,7 @@ async function loadChromeCommands(): Promise<
 
 export function ShortcutsSection({ onNavigateToInline }: ShortcutsSectionProps = {}) {
   const tapCount = useSettingsStore((s) => s.inlineTranslate.tapCount);
-  const timeWindowMs = useSettingsStore((s) => s.inlineTranslate.timeWindowMs);
+  const triggerKey = useSettingsStore((s) => s.inlineTranslate.triggerKey);
   const { success: showSuccess, error: showError } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,8 +82,8 @@ export function ShortcutsSection({ onNavigateToInline }: ShortcutsSectionProps =
   }, [refreshCommands]);
 
   const gestureRow = useMemo(
-    () => buildGestureRow(tapCount, timeWindowMs),
-    [tapCount, timeWindowMs],
+    () => buildGestureRow(tapCount, triggerKey),
+    [tapCount, triggerKey],
   );
 
   const allRows = useMemo(

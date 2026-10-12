@@ -20,7 +20,13 @@ import {
   isPasswordField,
   resolveEditableHost,
 } from './editable';
-import { createGestureController, isTriggerKey, type GestureController } from './gesture';
+import {
+  createGestureController,
+  isTriggerKey,
+  type GestureConfig,
+  type GestureController,
+} from './gesture';
+import { passesTailGate } from './tail';
 import {
   isCurrentPageBlocked,
   resolveBlocklistPatterns,
@@ -120,18 +126,22 @@ function onTrigger(target: HTMLElement): void {
   void runInlineTranslate(config, { element: host, skipStripTrailing: false });
 }
 
+function gestureConfigFrom(runtime: InlineTranslateRuntimeConfig): GestureConfig {
+  return {
+    enabled: runtime.enabled,
+    triggerKey: runtime.triggerKey,
+    tapCount: runtime.tapCount,
+    idleMs: runtime.idleMs,
+    triggerGapMs: runtime.triggerGapMs,
+    triggerToleranceCount: runtime.triggerToleranceCount,
+    triggerTimeoutMs: runtime.triggerTimeoutMs,
+  };
+}
+
 function ensureGesture(): GestureController {
   if (!gesture) {
     gesture = createGestureController(
-      {
-        enabled: config.enabled,
-        triggerKey: config.triggerKey,
-        tapCount: config.tapCount,
-        timeWindowMs: config.timeWindowMs,
-        idleMs: config.idleMs,
-        triggerGapMs: config.triggerGapMs,
-        triggerToleranceCount: config.triggerToleranceCount,
-      },
+      gestureConfigFrom(config),
       {
         onTrigger,
         // Accept any descendant of an editable host (ProseMirror nested nodes)
@@ -144,6 +154,13 @@ function ensureGesture(): GestureController {
         getText: (el) => {
           const host = resolveEditableHost(el) ?? el;
           return getElementText(host);
+        },
+        // Evaluated once the burst is in the field: it must really end it.
+        passesTailGate: (el) => {
+          // Named keys (legacy `Enter`) have no character to look for.
+          if (config.triggerKey.length !== 1) return true;
+          const host = resolveEditableHost(el) ?? el;
+          return passesTailGate(getElementText(host), config.triggerKey, config.tapCount);
         },
         // Shadow DOM: event.target is retargeted to the host, so resolve the
         // deepest node to find composers inside web components.
@@ -222,15 +239,7 @@ export function updateInlineTranslateConfig(
   baseConfig = { ...baseConfig, ...settingsToRuntime(partial) };
   if (options.siteRules) siteRules = options.siteRules;
   config = projectConfig();
-  gesture?.setConfig({
-    enabled: config.enabled,
-    triggerKey: config.triggerKey,
-    tapCount: config.tapCount,
-    timeWindowMs: config.timeWindowMs,
-    idleMs: config.idleMs,
-    triggerGapMs: config.triggerGapMs,
-    triggerToleranceCount: config.triggerToleranceCount,
-  });
+  gesture?.setConfig(gestureConfigFrom(config));
 }
 
 /** Set enabled/disabled state */

@@ -44,7 +44,6 @@ const cfg = (over: Partial<InlineTranslateRuntimeConfig> = {}): InlineTranslateR
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  timeWindowMs: 500,
   targetLanguage: 'en',
   idleMs: 0,
   triggerGapMs: 0,
@@ -431,7 +430,7 @@ describe('cancel-on-type during write-back', () => {
     fireKeydown(input, ' ');
     fireKeydown(input, ' ');
     fireKeydown(input, ' ');
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(300);
 
     expect(input.value).toBe('xin chào');
     expect(document.querySelector(`.${TOAST_CLASS}`)?.textContent).toBe('Translated ✓');
@@ -444,7 +443,7 @@ describe('cancel-on-type during write-back', () => {
     fireKeydown(typed, ' ');
     fireKeydown(typed, ' ');
     fireKeydown(typed, ' ');
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(300);
 
     typed.value = 'hello world!';
     typed.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: '!' }));
@@ -486,7 +485,7 @@ describe('shadow DOM composers', () => {
     ce.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, composed: true }));
     ce.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, composed: true }));
     ce.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, composed: true }));
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(300);
 
     expect(mockSendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'translateSelection', text: 'hello' }),
@@ -535,7 +534,7 @@ describe('settings gate', () => {
     for (let i = 0; i < 3; i++) {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     }
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(300);
     expect(mockSendMessage).not.toHaveBeenCalled();
 
     setInlineTranslateEnabled(true);
@@ -543,7 +542,7 @@ describe('settings gate', () => {
     for (let i = 0; i < 3; i++) {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
     }
-    await vi.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(300);
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
   });
 });

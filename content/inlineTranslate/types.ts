@@ -18,11 +18,6 @@ export interface InlineTranslateRuntimeConfig extends Omit<InlineTranslateSettin
 
 export const DEFAULT_RUNTIME_CONFIG: InlineTranslateRuntimeConfig = {
   ...DEFAULT_INLINE_TRANSLATE_SETTINGS,
-  // TODO(inline-parity-v2 P2T3): legacy window FSM timing until the two-branch
-  // gesture lands; stored settings replace these as soon as they load.
-  idleMs: 0,
-  triggerGapMs: 0,
-  triggerToleranceCount: 0,
   blocklistPatterns: [],
   autoLanguageSelectors: [],
 };

@@ -103,17 +103,18 @@ export const PAGE_SHORTCUT_ROWS: ShortcutDisplayRow[] = [
   },
 ];
 
-export function formatGestureLabel(tapCount: number): string {
-  return `Space × ${tapCount}`;
+export function formatGestureLabel(tapCount: number, triggerKey = ' '): string {
+  const key = triggerKey === ' ' || triggerKey === 'Space' ? 'Space' : triggerKey;
+  return `${key} × ${tapCount}`;
 }
 
-export function buildGestureRow(tapCount: number, timeWindowMs: number): ShortcutDisplayRow {
-  const shortcut = formatGestureLabel(tapCount);
+export function buildGestureRow(tapCount: number, triggerKey = ' '): ShortcutDisplayRow {
+  const shortcut = formatGestureLabel(tapCount, triggerKey);
   return {
     id: 'gesture-inline',
     scope: 'gesture',
     label: 'Inline input gesture',
-    description: `Translate focused input after the gesture (within ${timeWindowMs}ms). Same pipeline as Inline translate global command.`,
+    description: 'Translate the focused input by tapping the trailing key at the end of your text. Same pipeline as Inline translate global command.',
     where: 'Text fields on pages that are not blocklisted',
     shortcut,
     keyLabel: shortcut,

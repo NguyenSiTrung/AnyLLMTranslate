@@ -38,7 +38,6 @@ const baseConfig = (): InlineTranslateRuntimeConfig => ({
   enabled: true,
   triggerKey: ' ',
   tapCount: 3,
-  timeWindowMs: 500,
   targetLanguage: 'en',
   idleMs: 0,
   triggerGapMs: 0,
@@ -118,7 +117,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 500,
+        triggerTimeoutMs: 200,
         idleMs: 0,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -167,7 +166,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 1000,
+        triggerTimeoutMs: 200,
         idleMs: 0,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -206,7 +205,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 1000,
+        triggerTimeoutMs: 200,
         idleMs: 0,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -243,7 +242,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 1000,
+        triggerTimeoutMs: 200,
         idleMs: 0,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -291,7 +290,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 500,
+        triggerTimeoutMs: 200,
         idleMs: 100,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -328,7 +327,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 1000,
+        triggerTimeoutMs: 200,
         idleMs: 0,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -372,7 +371,7 @@ describe('gesture IME / repeat', () => {
         enabled: true,
         triggerKey: ' ',
         tapCount: 3,
-        timeWindowMs: 1000,
+        triggerTimeoutMs: 200,
         idleMs: 0,
         triggerGapMs: 0,
         triggerToleranceCount: 0,
@@ -686,3 +685,159 @@ describe('prefix + gesture pipeline', () => {
   });
 });
 
+
+describe('two-branch gesture FSM (refer truth table)', () => {
+  type Over = Partial<Parameters<typeof createGestureController>[0]>;
+
+  function setup(over: Over = {}, gate: (el: HTMLElement) => boolean = () => true) {
+    const triggers: HTMLElement[] = [];
+    const input = document.createElement('input');
+    input.value = 'hello';
+    document.body.appendChild(input);
+    const g = createGestureController(
+      {
+        enabled: true,
+        triggerKey: ' ',
+        tapCount: 3,
+        idleMs: 250,
+        triggerGapMs: 250,
+        triggerToleranceCount: 2,
+        triggerTimeoutMs: 200,
+        ...over,
+      },
+      {
+        onTrigger: (el) => triggers.push(el),
+        shouldAccept: (el): el is HTMLElement => el === input,
+        getText: () => input.value,
+        passesTailGate: gate,
+        now: () => Date.now(),
+      },
+    );
+    const key = (k: string, code = '') => {
+      const ev = new KeyboardEvent('keydown', { key: k, code, bubbles: true });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onKeyDown(ev);
+    };
+    const insert = (data: string | null, inputType = 'insertText') => {
+      const ev = new InputEvent('input', { bubbles: true, inputType, data });
+      Object.defineProperty(ev, 'target', { value: input });
+      g.onInput(ev);
+    };
+    /** Tap `n` times with `gap` ms between taps (fake clock). */
+    const taps = async (n: number, gap: number, k = ' ') => {
+      for (let i = 0; i < n; i++) {
+        if (i > 0) await vi.advanceTimersByTimeAsync(gap);
+        key(k, k === ' ' ? 'Space' : '');
+      }
+    };
+    return { g, triggers, key, insert, taps };
+  }
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers();
+  });
+
+  it('Space: 200 ms gaps ×3 fire after the idle window; 400 ms gaps never do', async () => {
+    const fast = setup();
+    await fast.taps(3, 200);
+    await vi.advanceTimersByTimeAsync(249);
+    expect(fast.triggers).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fast.triggers).toHaveLength(1);
+
+    const slow = setup();
+    await slow.taps(3, 400);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(slow.triggers).toHaveLength(0);
+  });
+
+  it('Space: 3–5 taps fire once (tolerance 2); 6 fast taps never fire', async () => {
+    for (const n of [3, 4, 5]) {
+      const s = setup();
+      await s.taps(n, 100);
+      await vi.advanceTimersByTimeAsync(300);
+      expect(s.triggers, `${n} taps`).toHaveLength(1);
+    }
+    const six = setup();
+    await six.taps(6, 100);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(six.triggers).toHaveLength(0);
+  });
+
+  it('Space: NBSP and U+3000 count as taps', async () => {
+    const s = setup();
+    s.insert(' ');
+    await vi.advanceTimersByTimeAsync(150);
+    s.key('　');
+    await vi.advanceTimersByTimeAsync(150);
+    s.insert(' ');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(s.triggers).toHaveLength(1);
+  });
+
+  it('a letter after the taps, a failed tail gate, compositionstart or a delete resets the burst', async () => {
+    const letter = setup();
+    await letter.taps(3, 100);
+    letter.key('a', 'KeyA');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(letter.triggers).toHaveLength(0);
+
+    const gated = setup({}, () => false);
+    await gated.taps(3, 100);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(gated.triggers).toHaveLength(0);
+    expect(gated.g.getCount()).toBe(0);
+
+    const ime = setup();
+    await ime.taps(2, 100);
+    ime.g.onCompositionStart(new Event('compositionstart'));
+    ime.g.onCompositionEnd(new Event('compositionend'));
+    ime.key(' ', 'Space');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(ime.triggers).toHaveLength(0);
+
+    const del = setup();
+    await del.taps(2, 100);
+    del.insert(null, 'deleteContentBackward');
+    del.key(' ', 'Space');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(del.triggers).toHaveLength(0);
+  });
+
+  it('non-space: `/`×3 within the combo interval fires immediately; a longer gap restarts the count', async () => {
+    const s = setup({ triggerKey: '/' });
+    await s.taps(3, 150, '/');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.triggers).toHaveLength(1);
+
+    const slow = setup({ triggerKey: '/' });
+    await slow.taps(3, 250, '/');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(slow.triggers).toHaveLength(0);
+
+    // Full-width alias and modifier presses between taps (Shift for `:`).
+    const wide = setup({ triggerKey: ':' });
+    wide.key('Shift');
+    wide.key(':');
+    await vi.advanceTimersByTimeAsync(120);
+    wide.key('Shift');
+    // An IME that swallows keydown: only the full-width insertText arrives.
+    wide.insert('：');
+    await vi.advanceTimersByTimeAsync(60);
+    wide.key(':');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(wide.triggers).toHaveLength(1);
+  });
+
+  it('keydown + insertText for one physical press still count once', async () => {
+    const s = setup();
+    for (let i = 0; i < 3; i++) {
+      s.key(' ', 'Space');
+      s.insert(' ');
+    }
+    expect(s.g.getCount()).toBe(3);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(s.triggers).toHaveLength(1);
+  });
+});
