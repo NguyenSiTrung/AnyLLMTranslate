@@ -26,7 +26,7 @@ import {
 import { SectionHeader } from '@/ui/SectionHeader';
 import { stagger } from '@/lib/styleUtils';
 import { useSettingsStore } from '@/stores/settingsStore';
-import type { SiteRule } from '@/types/config';
+import type { InlineSiteOverride, SiteRule } from '@/types/config';
 import { CRITICAL_GLOBAL_EXCLUDES } from '@/types/config';
 import { Card } from '@/ui/Card';
 import { Button } from '@/ui/Button';
@@ -38,6 +38,8 @@ import { SegmentedControl } from '@/ui/SegmentedControl';
 import { FieldGroup } from '@/ui/FieldGroup';
 import { EmptyState } from '@/ui/EmptyState';
 import { Modal } from '@/ui/Modal';
+import { Textarea } from '@/ui/Textarea';
+import { AdvancedDisclosure } from '@/ui/AdvancedDisclosure';
 import { PREDEFINED_CATEGORIES } from '@/lib/categories';
 import { DOMAIN_CATEGORY_MAP } from '@/content/utils/pageContext';
 import { mergeSuggestDraftIntoRuleForm } from '@/lib/siteRuleSuggest/mergeForm';
@@ -826,6 +828,119 @@ function SelectorChipsInput({
 
 /* ── Rule edit form ─────────────────────────────────────────── */
 
+/** Numeric per-site inline overrides, in display order. */
+const INLINE_NUMERIC_FIELDS = [
+  { key: 'triggerGapMs', label: 'Tap gap (ms)' },
+  { key: 'idleMs', label: 'Idle wait (ms)' },
+  { key: 'triggerToleranceCount', label: 'Tap tolerance' },
+  { key: 'cancelWindowMs', label: 'Cancel window (ms)' },
+  { key: 'minDurationMs', label: 'Minimum duration (ms)' },
+  { key: 'confirmLongTextLength', label: 'Long text threshold' },
+] as const;
+
+type InlineNumericKey = (typeof INLINE_NUMERIC_FIELDS)[number]['key'];
+
+/** Editable (string) form of a rule's `inlineTranslate` override. */
+export type InlineOverrideDraft = Record<InlineNumericKey, string> & {
+  /** One selector per line. */
+  autoLanguageSelectors: string;
+  autoLanguageEnable: 'inherit' | 'on' | 'off';
+};
+
+export function inlineOverrideDraftFrom(override: InlineSiteOverride | undefined): InlineOverrideDraft {
+  const numeric = Object.fromEntries(
+    INLINE_NUMERIC_FIELDS.map(({ key }) => [key, override?.[key] != null ? String(override[key]) : '']),
+  ) as Record<InlineNumericKey, string>;
+  return {
+    ...numeric,
+    autoLanguageSelectors: (override?.autoLanguageSelectors ?? []).join('\n'),
+    autoLanguageEnable:
+      override?.autoLanguageEnable == null ? 'inherit' : override.autoLanguageEnable ? 'on' : 'off',
+  };
+}
+
+/** Empty fields drop their key; an override with no keys left is `undefined`. */
+export function buildInlineSiteOverride(draft: InlineOverrideDraft): InlineSiteOverride | undefined {
+  const override: InlineSiteOverride = {};
+  for (const { key } of INLINE_NUMERIC_FIELDS) {
+    const raw = draft[key].trim();
+    const value = raw === '' ? NaN : Number(raw);
+    if (Number.isFinite(value) && value >= 0) override[key] = Math.round(value);
+  }
+  if (draft.autoLanguageEnable !== 'inherit') {
+    override.autoLanguageEnable = draft.autoLanguageEnable === 'on';
+  }
+  const selectors = draft.autoLanguageSelectors
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (selectors.length > 0) override.autoLanguageSelectors = selectors;
+  return Object.keys(override).length > 0 ? override : undefined;
+}
+
+function InlineOverrideFields({
+  draft,
+  onChange,
+}: {
+  draft: InlineOverrideDraft;
+  onChange: (draft: InlineOverrideDraft) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-zinc-500">
+        Overrides the global Inline Translation settings on this site. Leave a field empty to use
+        the global value.
+      </p>
+      <FieldGroup
+        label="Auto-language selectors"
+        description="One per line. Text of matching messages sets the reply language. Use parentElementTo <ancestor> <selector> for the closest thread only."
+        htmlFor="rule-edit-inline-selectors"
+      >
+        <Textarea
+          id="rule-edit-inline-selectors"
+          rows={3}
+          mono
+          spellCheck={false}
+          value={draft.autoLanguageSelectors}
+          onChange={(e) => onChange({ ...draft, autoLanguageSelectors: e.target.value })}
+          placeholder={'parentElementTo .thread .message-text'}
+          className="text-xs"
+        />
+      </FieldGroup>
+      <FieldGroup label="Auto language" htmlFor="rule-edit-inline-auto-language">
+        <Select
+          id="rule-edit-inline-auto-language"
+          value={draft.autoLanguageEnable}
+          onChange={(e) =>
+            onChange({ ...draft, autoLanguageEnable: e.target.value as InlineOverrideDraft['autoLanguageEnable'] })
+          }
+          options={[
+            { value: 'inherit', label: 'Use global setting' },
+            { value: 'on', label: 'On' },
+            { value: 'off', label: 'Off' },
+          ]}
+        />
+      </FieldGroup>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {INLINE_NUMERIC_FIELDS.map(({ key, label }) => (
+          <FieldGroup key={key} label={label} htmlFor={`rule-edit-inline-${key}`}>
+            <Input
+              id={`rule-edit-inline-${key}`}
+              type="number"
+              min={0}
+              inputMode="numeric"
+              placeholder="global"
+              value={draft[key]}
+              onChange={(e) => onChange({ ...draft, [key]: e.target.value })}
+              className="font-mono text-sm"
+            />
+          </FieldGroup>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RuleEditForm({
   rule,
   onSave,
@@ -844,6 +959,7 @@ function RuleEditForm({
     categoryValue: rule.category ?? '__none__',
     customCategory: '',
   });
+  const [inlineDraft, setInlineDraft] = useState(() => inlineOverrideDraftFrom(rule.inlineTranslate));
   const [suggestUrl, setSuggestUrl] = useState('');
   const [suggestStatus, setSuggestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
     'idle',
@@ -951,6 +1067,8 @@ function RuleEditForm({
       builtIn: form.builtIn,
       category: resolvedCategory,
     };
+    const inlineTranslate = buildInlineSiteOverride(inlineDraft);
+    if (inlineTranslate) cleanRule.inlineTranslate = inlineTranslate;
     onSave(cleanRule);
   };
 
@@ -1130,6 +1248,13 @@ function RuleEditForm({
               </button>
             )}
           </FieldGroup>
+        </section>
+
+        {/* Inline translate overrides */}
+        <section className="space-y-3 border-t border-white/5 pt-4">
+          <AdvancedDisclosure label="Inline translate" idPrefix="rule-edit-inline">
+            <InlineOverrideFields draft={inlineDraft} onChange={setInlineDraft} />
+          </AdvancedDisclosure>
         </section>
 
         <div className="flex justify-end gap-2 border-t border-white/5 pt-3">

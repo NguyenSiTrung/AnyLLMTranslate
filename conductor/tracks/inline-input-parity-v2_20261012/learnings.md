@@ -186,3 +186,10 @@ From `conductor/patterns.md` (inline-translate sections):
 - **Learnings:**
   - Gotchas: `sections.test.tsx › SubtitlesSection` can hit its 5 s timeout under a parallel run of `entrypoints/options`; isolated 2/2 green.
 ---
+
+## [2026-10-12] - Phase 5 Task 2: Site Rules "Inline translate" disclosure
+- **Implemented:** `RuleEditForm` holds an `InlineOverrideDraft` (strings + tri-state auto-language) seeded from `rule.inlineTranslate`; an "Inline translate" `AdvancedDisclosure` edits selectors (one per line), auto language (global/on/off) and six numeric overrides. `buildInlineSiteOverride` drops empty/invalid fields and returns `undefined` when nothing is left, so save omits `inlineTranslate`. Exported `inlineOverrideDraftFrom` / `buildInlineSiteOverride` for tests.
+- **Files changed:** entrypoints/options/sections/SiteRulesSection.tsx, entrypoints/options/sections/__tests__/siteRulesSection.test.tsx
+- **Learnings:**
+  - Gotchas: `handleSave` builds `cleanRule` field by field, so any new `SiteRule` field is silently dropped on save unless it is copied there (it now carries `inlineTranslate`).
+---
