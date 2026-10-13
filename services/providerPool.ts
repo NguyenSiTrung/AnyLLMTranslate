@@ -576,7 +576,7 @@ export class ProviderPoolCoordinator implements TranslationService {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         if (isCancelled()) {
-          throw new Error(ASR_REALIGN_CANCELLED);
+          throw new Error(ASR_REALIGN_CANCELLED, { cause: error });
         }
         const statusCode = error instanceof ApiError ? error.statusCode : undefined;
         const kind = this.breaker.classifyFailure(statusCode);

@@ -222,7 +222,7 @@ describe('handleTranslateSubtitle — Plus run', () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body?: string }) => {
       const body = JSON.parse(init.body ?? '{}') as { messages: Array<{ content: string }> };
       const userPrompt = body.messages[1]?.content ?? '';
-      const ids = [...userPrompt.matchAll(/\"?(s\d+)\"?\s*:/g)].map((m) => m[1]);
+      const ids = [...userPrompt.matchAll(/"?(s\d+)"?\s*:/g)].map((m) => m[1]);
       const translations: Record<string, string> = {};
       for (const id of ids) translations[id] = `vi-${id}`;
       return {
@@ -296,7 +296,7 @@ describe('handleTranslateSubtitle — Plus run', () => {
       // Chunk 1 covers cues 25-49, so only its prompt contains "line 30".
       // Content-based, not call-order-based: the pool runs chunks in parallel.
       if (userPrompt.includes('line 30')) throw new Error('network down');
-      const ids = [...userPrompt.matchAll(/\"?(s\d+)\"?\s*:/g)].map((m) => m[1]);
+      const ids = [...userPrompt.matchAll(/"?(s\d+)"?\s*:/g)].map((m) => m[1]);
       const translations: Record<string, string> = {};
       for (const id of ids) translations[id] = `vi-${id}`;
       return {

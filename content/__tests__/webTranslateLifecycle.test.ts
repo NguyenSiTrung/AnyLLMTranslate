@@ -20,6 +20,9 @@ import { DATA_ATTRS } from '@/lib/constants';
 import { DEFAULT_SETTINGS } from '@/types/config';
 import { deriveContentHash, type ResumePiece, type WebResumeSnapshot } from '@/lib/webResume';
 import { matchResumeTranslations, parentPathFromElement } from '@/lib/resumeIdentity';
+import type { __contentTranslationTestHooks } from '@/entrypoints/content';
+import type * as SessionSettingsCacheModule from '@/lib/sessionSettingsCache';
+import type * as WebResumeModule from '@/lib/webResume';
 
 /**
  * The content script refuses to translate until the in-product data disclosure
@@ -29,11 +32,54 @@ import { matchResumeTranslations, parentPathFromElement } from '@/lib/resumeIden
  */
 type RuntimeMessage = { action?: string; pieces?: Array<{ id: string }> };
 
+type PortMessage = { type?: string; id?: string; text?: string; error?: string };
+
+/** In-memory `chrome.runtime.Port` stand-in; `_resolve` delivers a message to its listeners. */
+function createMockPort(name?: string) {
+  const listeners: Array<() => void> = [];
+  const msgListeners: Array<(m: PortMessage) => void> = [];
+  const port = {
+    name,
+    postMessage: vi.fn((m: PortMessage) => {
+      port._posted.push(m);
+      if (m.type === 'request') {
+        port._request = m;
+      }
+    }),
+    onMessage: {
+      addListener: vi.fn((fn: (m: PortMessage) => void) => msgListeners.push(fn)),
+      removeListener: vi.fn(),
+    },
+    onDisconnect: { addListener: vi.fn((fn: () => void) => listeners.push(fn)), removeListener: vi.fn() },
+    disconnect: vi.fn(() => {
+      listeners.forEach((fn) => fn());
+    }),
+    _listeners: listeners,
+    _msgListeners: msgListeners,
+    _posted: [] as PortMessage[],
+    _request: undefined as PortMessage | undefined,
+    _resolve: (m: PortMessage) => msgListeners.forEach((fn) => fn(m)),
+  };
+  return port;
+}
+
+type MockPort = ReturnType<typeof createMockPort>;
+
+/** The stubbed `chrome` global, typed for the runtime spies these cases inspect. */
+type StubbedChrome = {
+  runtime: {
+    sendMessage: Mock<(msg: RuntimeMessage) => Promise<unknown>>;
+    connect: Mock<(info?: { name?: string }) => MockPort>;
+  };
+};
+
+function stubbedChrome(): StubbedChrome {
+  return (globalThis as unknown as { chrome: StubbedChrome }).chrome;
+}
+
 /** The stubbed `chrome.runtime.sendMessage` spy, typed for request matching. */
 function runtimeSendMessage(): Mock<(msg: RuntimeMessage) => Promise<unknown>> {
-  return (globalThis as unknown as {
-    chrome: { runtime: { sendMessage: Mock<(msg: RuntimeMessage) => Promise<unknown>> } };
-  }).chrome.runtime.sendMessage;
+  return stubbedChrome().runtime.sendMessage;
 }
 
 function settingsWithConsent<T extends Record<string, unknown>>(settings: T): T {
@@ -227,13 +273,14 @@ describe('webTranslateLifecycle', () => {
   });
 
   describe('FR-1b: real translatePieces lifecycle', () => {
-    let testHooks: any;
-    let loadSettingsCached: any;
+    let testHooks: typeof __contentTranslationTestHooks;
+    // Typed loosely: cases resolve partial settings objects, not full ExtensionSettings.
+    let loadSettingsCached: Mock<() => Promise<unknown>>;
     let loadResolve: (s: unknown) => void;
 
     beforeAll(async () => {
       vi.doMock('@/lib/sessionSettingsCache', async (importOriginal) => {
-        const original = await importOriginal<typeof import('@/lib/sessionSettingsCache')>();
+        const original = await importOriginal<typeof SessionSettingsCacheModule>();
         return { ...original, loadSettingsCached: vi.fn(), invalidateSessionSettingsCache: vi.fn() };
       });
       vi.doMock('@/content/translationDisplay', () => ({
@@ -276,7 +323,7 @@ describe('webTranslateLifecycle', () => {
       vi.doMock('@/content/chunkStability', () => ({
         captureScrollAnchor: vi.fn(() => null),
         restoreScrollAnchor: vi.fn(),
-        orderResultsByPieces: vi.fn((results: any[]) => results),
+        orderResultsByPieces: vi.fn((results: unknown[]) => results),
         isPieceNearViewport: vi.fn(() => true),
       }));
       vi.doMock('@/content/utils/pageContext', () => ({
@@ -304,7 +351,7 @@ describe('webTranslateLifecycle', () => {
         SAME_LANG_SKIP_CONFIDENCE: 0.95,
       }));
       vi.doMock('@/lib/webResume', async (importOriginal) => {
-        const original = await importOriginal<typeof import('@/lib/webResume')>();
+        const original = await importOriginal<typeof WebResumeModule>();
         return { ...original, writeResumeSnapshot: vi.fn() };
       });
       vi.doMock('@/content/domWalker', () => ({
@@ -339,30 +386,7 @@ describe('webTranslateLifecycle', () => {
       vi.resetModules();
       vi.unstubAllGlobals();
       const chromeSendMessage = vi.fn().mockResolvedValue({});
-      const chromeConnect = vi.fn((...args: any[]) => {
-        const listeners: any[] = [];
-        const msgListeners: any[] = [];
-        const port = {
-          name: args[0]?.name,
-          postMessage: vi.fn((m: any) => {
-            port._posted.push(m);
-            if (m.type === 'request') {
-              port._request = m;
-            }
-          }),
-          onMessage: { addListener: vi.fn((fn: any) => msgListeners.push(fn)), removeListener: vi.fn() },
-          onDisconnect: { addListener: vi.fn((fn: any) => listeners.push(fn)), removeListener: vi.fn() },
-          disconnect: vi.fn(() => {
-            listeners.forEach((fn: any) => fn());
-          }),
-          _listeners: listeners,
-          _msgListeners: msgListeners,
-          _posted: [] as any[],
-          _request: undefined as any,
-          _resolve: (m: any) => msgListeners.forEach((fn: any) => fn(m)),
-        };
-        return port;
-      });
+      const chromeConnect = vi.fn((info?: { name?: string }) => createMockPort(info?.name));
       vi.stubGlobal('chrome', {
         runtime: {
           sendMessage: chromeSendMessage,
@@ -383,9 +407,9 @@ describe('webTranslateLifecycle', () => {
       });
 
       const content = await import('@/entrypoints/content');
-      testHooks = (content as any).__contentTranslationTestHooks;
+      testHooks = content.__contentTranslationTestHooks;
       const settingsCached = await import('@/lib/sessionSettingsCache');
-      loadSettingsCached = vi.mocked(settingsCached.loadSettingsCached);
+      loadSettingsCached = vi.mocked(settingsCached.loadSettingsCached) as Mock<() => Promise<unknown>>;
       loadSettingsCached.mockReset();
       const domWalker = await import('@/content/domWalker');
       vi.mocked(domWalker.extractPieces).mockReset();
@@ -468,10 +492,10 @@ describe('webTranslateLifecycle', () => {
       expect(tDisplay.showInlineLoadingPlaceholder).not.toHaveBeenCalled();
       expect(tDisplay.applyTranslation).not.toHaveBeenCalled();
       expect(tDisplay.applyInlineTranslation).not.toHaveBeenCalled();
-      const chrome = (globalThis as any).chrome;
+      const chrome = stubbedChrome();
       expect(chrome.runtime.connect).not.toHaveBeenCalled();
       const sendMessages = chrome.runtime.sendMessage.mock.calls;
-      expect(sendMessages.some((c: any) => c[0]?.action === 'translate')).toBe(false);
+      expect(sendMessages.some((c) => c[0]?.action === 'translate')).toBe(false);
       expect(testHooks.getActiveRequests()).toBe(0);
     });
 
@@ -481,7 +505,7 @@ describe('webTranslateLifecycle', () => {
       const tp = testHooks.translatePieces([piece]);
 
       await vi.waitFor(() => {
-        const chrome = (globalThis as any).chrome;
+        const chrome = stubbedChrome();
         return chrome.runtime.connect.mock.calls.length > 0;
       }, { timeout: 500 });
 
@@ -492,9 +516,9 @@ describe('webTranslateLifecycle', () => {
       expect(tDisplay.removeAllTranslations).toHaveBeenCalled();
       expect(tDisplay.applyTranslation).not.toHaveBeenCalled();
       expect(tDisplay.applyInlineTranslation).not.toHaveBeenCalled();
-      const chrome = (globalThis as any).chrome;
+      const chrome = stubbedChrome();
       const sendMessages = chrome.runtime.sendMessage.mock.calls;
-      expect(sendMessages.some((c: any) => c[0]?.action === 'translate')).toBe(false);
+      expect(sendMessages.some((c) => c[0]?.action === 'translate')).toBe(false);
       expect(testHooks.getActiveRequests()).toBe(0);
     });
 
@@ -548,7 +572,7 @@ describe('webTranslateLifecycle', () => {
     it('0zh1: resume unload listeners are replaced on restart and removed on stop', async () => {
       const { extractPieces } = await import('@/content/domWalker');
       const display = await import('@/content/translationDisplay');
-      const chrome = (globalThis as any).chrome;
+      const chrome = stubbedChrome();
       const registered = new Map<string, Set<EventListener>>();
       const addSpy = vi.fn((type: string, listener: EventListener) => {
         let listeners = registered.get(type);
@@ -594,7 +618,7 @@ describe('webTranslateLifecycle', () => {
 
       const saveCalls = () =>
         chrome.runtime.sendMessage.mock.calls.filter(
-          (call: any[]) => call[0]?.action === 'WEB_RESUME_SAVE',
+          (call) => call[0]?.action === 'WEB_RESUME_SAVE',
         );
       await testHooks.startTranslation();
 
@@ -640,7 +664,7 @@ describe('webTranslateLifecycle', () => {
     it('0zh1: zombie teardown removes the active resume unload pair', async () => {
       const { extractPieces } = await import('@/content/domWalker');
       const display = await import('@/content/translationDisplay');
-      const chrome = (globalThis as any).chrome;
+      const chrome = stubbedChrome();
       const registered = new Map<string, Set<EventListener>>();
       const addSpy = vi.fn((type: string, listener: EventListener) => {
         let listeners = registered.get(type);
@@ -697,7 +721,7 @@ describe('webTranslateLifecycle', () => {
       window.dispatchEvent(new Event('beforeunload'));
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(chrome.runtime.sendMessage.mock.calls.some(
-        (call: any[]) => call[0]?.action === 'WEB_RESUME_SAVE',
+        (call) => call[0]?.action === 'WEB_RESUME_SAVE',
       )).toBe(false);
     });
 
@@ -1308,8 +1332,8 @@ describe('webTranslateLifecycle', () => {
         ...defaultSettings(),
         enableStreamingTranslation: false,
       }));
-      const chrome = (globalThis as any).chrome;
-      chrome.runtime.sendMessage.mockImplementation(async (msg: any) => {
+      const chrome = stubbedChrome();
+      chrome.runtime.sendMessage.mockImplementation(async (msg) => {
         if (msg?.action === 'translate') {
           return {
             success: true,
@@ -1837,9 +1861,9 @@ describe('webTranslateLifecycle', () => {
 
       // Piece goes in-flight via streaming.
       const tp = testHooks.translatePieces([oldPiece]);
-      const chrome = (globalThis as any).chrome;
+      const chrome = stubbedChrome();
       await vi.waitFor(() => chrome.runtime.connect.mock.calls.length > 0, { timeout: 500 });
-      const port = chrome.runtime.connect.mock.results.at(-1).value;
+      const port = chrome.runtime.connect.mock.results.at(-1)!.value as MockPort;
 
       // Source changes while the request is in flight — piece invalidated.
       p.setAttribute(DATA_ATTRS.ROLE, 'original');
@@ -1862,7 +1886,7 @@ describe('webTranslateLifecycle', () => {
       port._resolve({ type: 'error', error: 'stream failed' });
       await tp;
       const sends = chrome.runtime.sendMessage.mock.calls;
-      expect(sends.some((c: any) => c[0]?.action === 'translate')).toBe(false);
+      expect(sends.some((c) => c[0]?.action === 'translate')).toBe(false);
     });
 
     // sm7n owner-aware cleanup: mirrors translationDisplay.removePieceArtifacts
@@ -2131,10 +2155,10 @@ describe('webTranslateLifecycle', () => {
       // No spinner, no stream port, no non-stream translate for a dead piece.
       expect(display.showLoadingPlaceholder).not.toHaveBeenCalled();
       expect(display.showInlineLoadingPlaceholder).not.toHaveBeenCalled();
-      const chrome = (globalThis as any).chrome;
+      const chrome = stubbedChrome();
       expect(chrome.runtime.connect).not.toHaveBeenCalled();
       const sends = chrome.runtime.sendMessage.mock.calls;
-      expect(sends.some((c: any) => c[0]?.action === 'translate')).toBe(false);
+      expect(sends.some((c) => c[0]?.action === 'translate')).toBe(false);
       expect(testHooks.getActiveRequests()).toBe(0);
     });
 
