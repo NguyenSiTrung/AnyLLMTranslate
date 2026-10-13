@@ -1,0 +1,1 @@
+P2T2: tail.ts passesTailGate/removeTail/protectUrls wired into orchestrate (FR-4, FR-5). Tests: inlineTranslate.tail.test.ts

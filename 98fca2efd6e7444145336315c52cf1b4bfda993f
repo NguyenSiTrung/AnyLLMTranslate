@@ -1,0 +1,1 @@
+P6T1: origin:'inline' on TranslateSelectionMessage; background recordUsage mode inline for plain path; tests green, tsc 0, lint 37

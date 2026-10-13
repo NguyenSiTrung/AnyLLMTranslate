@@ -1,0 +1,1 @@
+P1T3: SiteRule.inlineTranslate + resolveInlineSiteConfig + chat seeds (FR-8). Tests: lib/__tests__/siteRules.test.ts

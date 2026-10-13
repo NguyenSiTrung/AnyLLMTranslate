@@ -1,0 +1,9 @@
+Task: reduce total test cases ~20% and cut suite runtime (AnyLLMTranslate-stsf).
+
+Result: 936 -> 656 cases (-29.9%, target -20%); wall time 117s (forks, 5 flaky failures) -> ~61s stable across 4 consecutive all-green runs; coverage 78.81% -> 80.17% statements vs a 70% floor.
+
+Approach: merge micro-test cases (it.each -> single it + loop; adjacent same-harness one-assertion tests folded with per-facet comments) across 60 test files with zero assertions dropped; delete 3 exact cross-file duplicates; root-cause and fix the background.test.ts fake-timer leak that cascaded into 5 load-sensitive failures; add a global timer hand-back in vitest.setup.ts; switch the runner to pool 'threads', which was the dominant wall-time lever because per-file setup rather than test execution bounds this suite.
+
+Verification: pnpm vitest run 656/656 passing; pnpm vitest run --coverage 656/656 passing at 80.17% statements; tsc --noEmit clean; eslint unchanged from HEAD (34 pre-existing errors in untouched files). No production source modified.
+
+Not done / next lever: file count is still 104. Merging the ~26 small node-env files (<=3 tests, ~0.05s of test time but ~1.8s of per-file setup each) into thematic suites could cut another ~10-15%, but it risks vi.mock and cross-file global-leak breakage, which is why the earlier consolidation kept some files separate.

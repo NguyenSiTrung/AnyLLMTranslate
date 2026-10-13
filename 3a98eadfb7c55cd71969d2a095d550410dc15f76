@@ -1,0 +1,1 @@
+P1T1: InlineTranslateSettings refer-parity fields + defaults (FR-14). Tests: types/__tests__/config.test.ts
