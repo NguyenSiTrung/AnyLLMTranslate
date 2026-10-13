@@ -1,45 +1,42 @@
 {
-  "lastRefresh": "2026-10-09T22:30:00+07:00",
+  "lastRefresh": "2026-10-13T12:00:00+07:00",
   "scope": "all",
-  "reviewedHead": "e1f12be",
+  "reviewedHead": "d648ecf4",
   "previousRefresh": {
-    "at": "2026-10-06T18:17:43+00:00",
-    "head": "1c99463"
+    "at": "2026-10-09T22:30:00+07:00",
+    "head": "887ec1f8"
   },
   "changes": [
-    "Scope: full refresh (no argument; 'all' matches every prior refresh). Window 1c99463..e1f12be = 31 commits: c6b716b refresh, da8a7da stale-test delete, and the whole page-translation-hardening_20261009 track (newtrack, 20 fixes over 5 phases, checkpoints, complete, archive). 36 non-doc files changed (+2425/-449). No package.json, lockfile, config or CI changes.",
-    "tracks.md REPAIRED: archive commit e1f12be dropped the active entry but never added the archived ✅ line for page-translation-hardening_20261009, and left a duplicate empty '## Active Tracks' heading. Added the archived entry, removed the duplicate, and updated the archive marker to 74 archived / 0 active.",
-    "product.md: new Page Translation bullet summarising the hardening behaviours; Completed entry for the track; Current State updated (836/122 green, flake 4/6 tracked as slmv, ESLint 37 with per-file breakdown, 74 archived, Beads 1 open / 0 in progress / 566 closed).",
-    "tech-stack.md: quality snapshot replaced with the 2026-10-09 rerun; new source-shape bullet (churnGuard, pageLifecycle, pieceText, webTranslateRetry, CANCEL_PAGE_TRANSLATE, backfilledIds/servedBy, code-block smart excludes); 9th consecutive window with no dependency drift.",
-    "workflow.md: marker replaced; flake paragraph gains the 2026-10-09 rate (4/6) and the rule that a red streamStats run is not a gate failure only if a repeat full run is green.",
-    "patterns.md: marker and footer replaced; added one cross-track pattern (retry classifiers vs. negative-cache classifier, from 727f3a8 and page-translation-hardening). The archive commit had already elevated the track's own 4 patterns.",
-    "Beads: filed AnyLLMTranslate-slmv (P2 bug, streamStats flake), the successor to the force-closed n9ur. No plan.md drift: 0 active tracks."
+    "Scope: full refresh (no scope argument; 'all' matches every prior refresh). Window 887ec1f8..d648ecf4 = 37 commits: the whole inline-input-parity-v2_20261012 track (newtrack, 20 tasks over 6 phases, checkpoints, complete, archive), release 1.0.1, ESLint cleanup 614dfe8b, streamStats flake fix d648ecf4, .agents skill-mirror pruning and .gitignore changes. 48 source/test files changed (+3939/-527). Only the package.json version changed; lockfile and CI unchanged.",
+    "tracks.md: already correct (75 archived / 0 active); marker only.",
+    "product.md: feature bullet and Completed entry were already written by 6b35a05. Current State rewritten (929/133 green, streamStats 6/6, lint 0, build 3.95 MB, 75 archived, Beads 0 open / 600 closed); test-suite history extended.",
+    "tech-stack.md: quality snapshot replaced with the 2026-10-13 rerun; new source-shape bullet for the v2 modules, lib/inlineTriggerKeys.ts, the .agents/skills pruning and .gitignore changes; 10th consecutive window with no dependency drift.",
+    "workflow.md: streamStats flake exception retired (root-caused race, not load; red is a gate failure again); lint-gate paragraph rewritten to 'green, must exit 0'.",
+    "patterns.md: one new cross-track testing pattern (seed test settings as an already-migrated install) from inline-input-parity-v2, web-translate-v3 and d648ecf4; qualified 'a moving failure set means load'.",
+    "Beads: closed AnyLLMTranslate-slmv as fixed by d648ecf4. No plan.md drift: 0 active tracks."
   ],
   "codebaseHealth": {
-    "tests": "836/836 green across 122 files on a clean full rerun (~25 s); the first full run had 1 failure in background.streamStats.test.ts",
-    "flake": "services/__tests__/background.streamStats.test.ts failed 4/6 isolated runs; the failing case moves between runs (AnyLLMTranslate-slmv)",
+    "tests": "929/929 green across 133 files on the first full run (~49 s)",
+    "flake": "services/__tests__/background.streamStats.test.ts passed 6/6 isolated runs after d648ecf4 (AnyLLMTranslate-slmv closed)",
     "tsc": 0,
-    "eslintErrors": 37,
-    "eslintBreakdown": {
-      "content/__tests__/webTranslateLifecycle.test.ts": 32,
-      "services/__tests__/background.plus.test.ts": 4,
-      "services/providerPool.ts:579": 1
-    },
-    "buildTotal": "3.92 MB",
-    "coverage": "not rerun; last 2026-09-28 80.26/77.40/83.08"
+    "eslintErrors": 0,
+    "buildTotal": "3.95 MB",
+    "coverage": "not rerun; last 2026-09-28 80.26/77.40/83.08",
+    "version": "1.0.1"
   },
   "beads": {
-    "open": 1,
+    "open": 0,
     "inProgress": 0,
-    "closed": 566,
-    "filedThisRefresh": [
+    "closed": 600,
+    "closedThisRefresh": [
       "AnyLLMTranslate-slmv"
     ]
   },
   "learningsConsolidation": {
-    "archivedLearnings": 72,
+    "archivedLearnings": 73,
     "activeLearnings": 0,
     "newPatterns": 1,
-    "alreadyElevatedByArchive": 4
+    "amendedPatterns": 1,
+    "alreadyElevatedByArchive": 13
   }
 }

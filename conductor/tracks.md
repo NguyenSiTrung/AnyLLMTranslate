@@ -1,5 +1,5 @@
 <!-- conductor-archive: 2026-10-13 inline-input-parity-v2_20261012 archived (75 archived / 0 active) -->
-<!-- conductor-refresh: 2026-10-09 all (74 archived / 0 active Conductor tracks. Repaired this file: the 2026-10-09 archive commit dropped the active entry but never added the archived ✅ line and left a duplicate empty "## Active Tracks" heading. Beads 1 open (AnyLLMTranslate-slmv, streamStats flake) / 0 in progress / 566 closed. No active plan.md checkboxes, so no directional sync applies.) -->
+<!-- conductor-refresh: 2026-10-13 all (75 archived / 0 active Conductor tracks; this file was already correct after the inline-input-parity-v2 archive. Beads 0 open / 0 in progress / 600 closed after closing AnyLLMTranslate-slmv as fixed by d648ecf4. No active plan.md checkboxes, so no directional sync applies.) -->
 # Project Tracks
 
 This file tracks all major tracks for the project.
