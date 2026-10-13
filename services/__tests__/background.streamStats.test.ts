@@ -97,6 +97,11 @@ const getCachedFailure = vi.mocked(cacheManager.getCachedFailure);
 
 function seedSettings(): void {
   mockStorage['anyllm-translate-settings'] = {
+    // Already-migrated install: an unmigrated seed makes loadSettings() fire a
+    // fire-and-forget saveSettings() whose encrypted write can land after a
+    // case mutates the stored settings, silently reverting the mutation.
+    safeKeyThrottleMigrated: true,
+    inlineParityV2Migrated: true,
     providers: [
       {
         id: 'prov-stream',
